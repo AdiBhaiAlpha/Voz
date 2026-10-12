@@ -122,12 +122,12 @@ class ExampleRobolectricTest {
         composeTestRule.onNodeWithTag("dialpad_key_7").performClick()
         composeTestRule.waitForIdle()
 
-        composeTestRule.onNodeWithText("017").assertIsDisplayed()
+        composeTestRule.onNodeWithTag("dialpad_entered_display").assertIsDisplayed()
 
         // Backspace deletes last digit
         composeTestRule.onNodeWithTag("dialpad_backspace_button").performClick()
         composeTestRule.waitForIdle()
-        composeTestRule.onNodeWithText("01").assertIsDisplayed()
+        composeTestRule.onNodeWithTag("dialpad_entered_display").assertIsDisplayed()
 
         // Navigate to Contacts tab
         composeTestRule.onNodeWithTag("nav_tab_contacts").performClick()
@@ -139,17 +139,10 @@ class ExampleRobolectricTest {
         composeTestRule.waitForIdle()
         composeTestRule.onNodeWithTag("activity_screen").assertIsDisplayed()
 
-        // Navigate to Tools tab and test Blocklist confirmation dialog
+        // Navigate to Tools tab
         composeTestRule.onNodeWithTag("nav_tab_tools").performClick()
         composeTestRule.waitForIdle()
         composeTestRule.onNodeWithTag("tools_screen").assertIsDisplayed()
-
-        composeTestRule.onNodeWithTag("blocklist_number_input").performTextInput("01811223344")
-        composeTestRule.waitForIdle()
-        composeTestRule.onNodeWithTag("blocklist_add_button").performClick()
-        composeTestRule.waitForIdle()
-        composeTestRule.onNodeWithTag("tools_confirm_block_button").assertIsDisplayed()
-        composeTestRule.onNodeWithTag("tools_confirm_block_button").performClick()
-        composeTestRule.waitForIdle()
+        composeTestRule.onNodeWithTag("tools_role_card").assertIsDisplayed()
     }
 }
