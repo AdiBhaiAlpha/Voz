@@ -7,6 +7,9 @@ on:
     branches: [ "main", "master" ]
   workflow_dispatch:
 
+permissions:
+  contents: write
+
 jobs:
   build:
     runs-on: ubuntu-latest
@@ -63,9 +66,31 @@ jobs:
       - name: Build Debug APK
         run: gradle :app:assembleDebug
 
+      - name: Copy APK to Project Root
+        run: |
+          cp app/build/outputs/apk/debug/app-debug.apk ./VOZ.apk
+          cp app/build/outputs/apk/debug/app-debug.apk ./app-debug.apk
+
       - name: Upload Debug APK Artifact
         uses: actions/upload-artifact@v4
         with:
           name: voz-debug-apk
           path: app/build/outputs/apk/debug/*.apk
           if-no-files-found: error
+
+      - name: Publish Direct APK Download Release
+        if: github.event_name == 'push' && (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/master')
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: latest
+          name: "VOZ Android APK (Latest)"
+          body: |
+            ### Direct Download Link
+            Download the raw APK directly on your phone:
+            - **[Download VOZ.apk](https://github.com/${{ github.repository }}/releases/latest/download/VOZ.apk)**
+            - **[Download app-debug.apk](https://github.com/${{ github.repository }}/releases/latest/download/app-debug.apk)**
+          files: |
+            app/build/outputs/apk/debug/app-debug.apk
+            VOZ.apk
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
