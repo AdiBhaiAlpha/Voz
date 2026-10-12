@@ -1,0 +1,130 @@
+<resources>
+    <string name="app_name">VOZ</string>
+    <string name="app_tagline">A smarter way to stay connected.</string>
+    <string name="incall_activity_title">VOZ Call</string>
+
+    <!-- Navigation -->
+    <string name="nav_home">Home</string>
+    <string name="nav_contacts">Contacts</string>
+    <string name="nav_activity">Activity</string>
+    <string name="nav_tools">Tools</string>
+
+    <!-- Home & Search -->
+    <string name="search_placeholder">Search name, Bangla, or number (T9)…</string>
+    <string name="open_dialpad">Keypad</string>
+    <string name="hide_dialpad">Hide Keypad</string>
+    <string name="section_favorites">Pinned &amp; Important</string>
+    <string name="section_reminders">Call-Back Reminders</string>
+    <string name="section_recent_calls">Recent Communication</string>
+    <string name="section_matched_contacts">Matching Contacts</string>
+    <string name="direct_dial_prompt">Call %1$s directly</string>
+    <string name="empty_home_title">Ready when you are</string>
+    <string name="empty_home_subtitle">Use the smart keypad or grant contact &amp; call-log access to search by name, Bangla script, or T9 digits.</string>
+
+    <!-- Dialpad -->
+    <string name="dialpad_empty_hint">Enter number or T9 name</string>
+    <string name="dialpad_backspace_desc">Delete last digit, long press to clear all</string>
+    <string name="dialpad_paste_desc">Paste number from clipboard</string>
+    <string name="dialpad_call_desc">Place call</string>
+    <string name="dialpad_sim_select_title">Select SIM for this call</string>
+    <string name="dialpad_confirm_ambiguous_title">Confirm Call Destination</string>
+    <string name="dialpad_confirm_ambiguous_body">Place call to %1$s (%2$s)?</string>
+
+    <!-- Contacts -->
+    <string name="contacts_title">Directory</string>
+    <string name="contacts_search_placeholder">Filter contacts by English, বাংলা, or digits…</string>
+    <string name="contacts_empty_title">No accessible contacts</string>
+    <string name="contacts_empty_subtitle">Your device contact book is empty or no contacts match your search query.</string>
+    <string name="contacts_permission_title">Contacts Access Needed</string>
+    <string name="contacts_permission_body">VOZ uses local read-only access to let you find people quickly by English, Bangla, or T9 keypad digits. Contacts never leave your device.</string>
+    <string name="grant_permission">Grant Access</string>
+    <string name="open_system_settings">Open App Settings</string>
+
+    <!-- Activity / Call History -->
+    <string name="activity_title">Call Timeline</string>
+    <string name="filter_all">All</string>
+    <string name="filter_missed">Missed</string>
+    <string name="filter_incoming">Incoming</string>
+    <string name="filter_outgoing">Outgoing</string>
+    <string name="call_type_incoming">Incoming</string>
+    <string name="call_type_outgoing">Outgoing</string>
+    <string name="call_type_missed">Missed</string>
+    <string name="call_type_rejected">Declined</string>
+    <string name="call_type_blocked">Blocked</string>
+    <string name="call_log_permission_title">Call History Access Needed</string>
+    <string name="call_log_permission_body">VOZ groups consecutive calls and highlights missed calls locally on your device. Grant Call Log access to view your timeline.</string>
+    <string name="call_log_empty_title">No call records found</string>
+    <string name="call_log_empty_subtitle">Calls placed or received on this device will appear here chronologically.</string>
+    <string name="clear_call_history">Clear Call History</string>
+    <string name="clear_call_history_confirm_title">Clear System Call History?</string>
+    <string name="clear_call_history_confirm_body">This will permanently remove accessible call log entries from your device. App-created notes and reminders are kept safely.</string>
+    <string name="delete_call_entry_confirm_title">Delete Call Record?</string>
+    <string name="delete_call_entry_confirm_body">Remove this call record from system history?</string>
+
+    <!-- Call Assist -->
+    <string name="assist_notes_title">VOZ Call Assist Note</string>
+    <string name="assist_note_hint">Add context (e.g., met at Dhaka conference, prefers evening calls)…</string>
+    <string name="assist_label_hint">Custom label (e.g., Family, Doctor, Emergency, Work)</string>
+    <string name="assist_save">Save Note</string>
+    <string name="assist_delete">Delete Note</string>
+    <string name="assist_reminder_add">Add Call-Back Reminder</string>
+    <string name="assist_reminder_reason_hint">Reason to call back…</string>
+    <string name="assist_mark_important">Important Contact</string>
+    <string name="assist_mark_favorite">Pin to Home</string>
+    <string name="assist_badge_local_only">Local App Metadata — Not synced to cloud</string>
+
+    <!-- Blocklist & Spam -->
+    <string name="blocklist_title">Blocked Numbers</string>
+    <string name="blocklist_add_number">Block a Number</string>
+    <string name="blocklist_number_hint">Phone number (+8801… or 01…)</string>
+    <string name="blocklist_reason_hint">Optional note (e.g., Telemarketer)</string>
+    <string name="block_confirm_title">Block %1$s?</string>
+    <string name="block_confirm_body">When VOZ is set as your Default Dialer or Call Screening app, incoming calls from matching normalized numbers will be automatically declined.</string>
+    <string name="unblock_action">Unblock</string>
+    <string name="block_action">Block</string>
+    <string name="blocked_badge">On User Blocklist</string>
+
+    <!-- In-Call & Incoming Call -->
+    <string name="incoming_call_label">Incoming Call</string>
+    <string name="ongoing_call_label">Active Call</string>
+    <string name="call_state_ringing">Ringing…</string>
+    <string name="call_state_dialing">Dialing…</string>
+    <string name="call_state_active">Connected</string>
+    <string name="call_state_holding">On Hold</string>
+    <string name="call_state_disconnecting">Ending call…</string>
+    <string name="call_state_disconnected">Call ended</string>
+    <string name="action_answer">Answer</string>
+    <string name="action_decline">Decline</string>
+    <string name="action_hangup">End Call</string>
+    <string name="action_mute">Mute</string>
+    <string name="action_speaker">Speaker</string>
+    <string name="action_hold">Hold</string>
+    <string name="action_keypad">Keypad</string>
+
+    <!-- Tools & Settings -->
+    <string name="tools_title">Tools &amp; Preferences</string>
+    <string name="role_dialer_card_title">Default Phone App Role</string>
+    <string name="role_dialer_active">VOZ is your active Default Dialer</string>
+    <string name="role_dialer_inactive">Set VOZ as Default Dialer to enable in-call screen, call waiting, and automatic blocklist screening.</string>
+    <string name="role_dialer_request_btn">Set as Default Dialer</string>
+    <string name="role_screening_request_btn">Enable Call Screening Role</string>
+    <string name="theme_setting_title">Appearance</string>
+    <string name="theme_system">System Default</string>
+    <string name="theme_light">Warm Editorial Light</string>
+    <string name="theme_dark">Deep Charcoal Dark</string>
+    <string name="language_setting_title">Interface Language</string>
+    <string name="lang_english">English</string>
+    <string name="lang_bangla">বাংলা (Bangla)</string>
+    <string name="haptics_setting_title">Dialpad Haptic Feedback</string>
+    <string name="sound_setting_title">Dialpad DTMF Tones</string>
+    <string name="one_handed_setting_title">One-Handed Compact Reach</string>
+    <string name="reduce_motion_setting_title">Reduce Motion</string>
+    <string name="confirm_before_call_title">Confirm Before Calling</string>
+    <string name="confirm_before_call_subtitle">Prevent accidental calls when tapping contacts or history items</string>
+    <string name="privacy_policy_title">Privacy &amp; Architecture Guarantee</string>
+    <string name="privacy_policy_summary">Zero network permissions. Zero analytics or ad SDKs. All contacts, call logs, notes, and blocked numbers stay strictly on your device.</string>
+    <string name="diagnostics_title">System &amp; Hardware Diagnostics</string>
+    <string name="cancel">Cancel</string>
+    <string name="confirm">Confirm</string>
+    <string name="unknown_caller">Unknown Number</string>
+</resources>

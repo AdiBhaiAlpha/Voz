@@ -1,0 +1,6 @@
+{
+  "name": "VOZ",
+  "description": "A smarter way to stay connected. Privacy-first native Android phone dialer and communication utility with Bangla & English support, T9 contact search, grouped call history, Telecom InCallService, and local Call Assist.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}

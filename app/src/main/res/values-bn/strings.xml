@@ -1,0 +1,130 @@
+<resources>
+    <string name="app_name">VOZ</string>
+    <string name="app_tagline">যোগাযোগের একটি স্মার্ট ও নিরাপদ মাধ্যম।</string>
+    <string name="incall_activity_title">VOZ কল</string>
+
+    <!-- Navigation -->
+    <string name="nav_home">হোম</string>
+    <string name="nav_contacts">কন্টাক্টস</string>
+    <string name="nav_activity">কল লগ</string>
+    <string name="nav_tools">টুলস ও সেটিংস</string>
+
+    <!-- Home & Search -->
+    <string name="search_placeholder">নাম, বাংলা বা নম্বর দিয়ে খুঁজুন (T9)…</string>
+    <string name="open_dialpad">কীপ্যাড</string>
+    <string name="hide_dialpad">কীপ্যাড লুকান</string>
+    <string name="section_favorites">জরুরি ও প্রিয় কন্টাক্ট</string>
+    <string name="section_reminders">কল-ব্যাক রিমাইন্ডার</string>
+    <string name="section_recent_calls">সাম্প্রতিক যোগাযোগ</string>
+    <string name="section_matched_contacts">মিলে যাওয়া কন্টাক্ট</string>
+    <string name="direct_dial_prompt">%1$s নম্বরে সরাসরি কল করুন</string>
+    <string name="empty_home_title">কল করার জন্য প্রস্তুত</string>
+    <string name="empty_home_subtitle">স্মার্ট কীপ্যাড ব্যবহার করুন অথবা বাংলা, ইংরেজি নাম ও T9 ডিজিট দিয়ে খুঁজতে কন্টাক্ট ও কল লগ অনুমতি দিন।</string>
+
+    <!-- Dialpad -->
+    <string name="dialpad_empty_hint">নম্বর বা নাম লিখুন</string>
+    <string name="dialpad_backspace_desc">শেষ ডিজিট মুছুন, সব মুছতে চাপ দিয়ে ধরে রাখুন</string>
+    <string name="dialpad_paste_desc">ক্লিপবোর্ড থেকে নম্বর পেস্ট করুন</string>
+    <string name="dialpad_call_desc">কল করুন</string>
+    <string name="dialpad_sim_select_title">কলের জন্য সিম নির্বাচন করুন</string>
+    <string name="dialpad_confirm_ambiguous_title">কল নিশ্চিত করুন</string>
+    <string name="dialpad_confirm_ambiguous_body">%1$s (%2$s)-এ কল করতে চান?</string>
+
+    <!-- Contacts -->
+    <string name="contacts_title">কন্টাক্ট ডিরেক্টরি</string>
+    <string name="contacts_search_placeholder">বাংলা, ইংরেজি বা নম্বর দিয়ে খুঁজুন…</string>
+    <string name="contacts_empty_title">কোনো কন্টাক্ট পাওয়া যায়নি</string>
+    <string name="contacts_empty_subtitle">আপনার ফোনে কোনো কন্টাক্ট নেই অথবা অনুসন্ধানের সাথে কিছু মেলেনি।</string>
+    <string name="contacts_permission_title">কন্টাক্ট দেখার অনুমতি প্রয়োজন</string>
+    <string name="contacts_permission_body">বাংলা ও ইংরেজি নাম বা কীপ্যাড দিয়ে দ্রুত নম্বর খুঁজতে VOZ শুধুমাত্র আপনার ফোনের ভেতরেই কন্টাক্ট পড়ে। কোনো তথ্য কখনোই ইন্টারনেটে পাঠানো হয় না।</string>
+    <string name="grant_permission">অনুমতি দিন</string>
+    <string name="open_system_settings">অ্যাপ সেটিংস খুলুন</string>
+
+    <!-- Activity / Call History -->
+    <string name="activity_title">কল টাইমলাইন</string>
+    <string name="filter_all">সব</string>
+    <string name="filter_missed">মিসড কল</string>
+    <string name="filter_incoming">ইনকামিং</string>
+    <string name="filter_outgoing">আউটগোয়িং</string>
+    <string name="call_type_incoming">ইনকামিং</string>
+    <string name="call_type_outgoing">আউটগোয়িং</string>
+    <string name="call_type_missed">মিসড কল</string>
+    <string name="call_type_rejected">বাতিল</string>
+    <string name="call_type_blocked">ব্লক করা</string>
+    <string name="call_log_permission_title">কল হিস্ট্রি দেখার অনুমতি প্রয়োজন</string>
+    <string name="call_log_permission_body">মিসড কল ও কথোপকথনের সময়সূচি একসাথে দেখতে কল লগ অনুমতি দিন।</string>
+    <string name="call_log_empty_title">কোনো কল রেকর্ড নেই</string>
+    <string name="call_log_empty_subtitle">এই ফোনে করা বা আসা কলগুলো সময়ের ক্রমানুসারে এখানে দেখা যাবে।</string>
+    <string name="clear_call_history">কল হিস্ট্রি মুছে ফেলুন</string>
+    <string name="clear_call_history_confirm_title">সিস্টেম কল হিস্ট্রি মুছবেন?</string>
+    <string name="clear_call_history_confirm_body">এটি আপনার ফোনের কল লগ স্থায়ীভাবে মুছে ফেলবে। আপনার লেখা নোট ও রিমাইন্ডার সুরক্ষিত থাকবে।</string>
+    <string name="delete_call_entry_confirm_title">কল রেকর্ড মুছবেন?</string>
+    <string name="delete_call_entry_confirm_body">সিস্টেম কল লগ থেকে এই রেকর্ডটি মুছে ফেলতে চান?</string>
+
+    <!-- Call Assist -->
+    <string name="assist_notes_title">VOZ কল অ্যাসিস্ট নোট</string>
+    <string name="assist_note_hint">প্রয়োজনীয় নোট লিখুন (যেমন: জরুরি কথা, সন্ধ্যায় কল করবেন)…</string>
+    <string name="assist_label_hint">কাস্টম লেবেল (যেমন: পরিবার, ডাক্তার, অফিস)</string>
+    <string name="assist_save">নোট সংরক্ষণ</string>
+    <string name="assist_delete">নোট মুছুন</string>
+    <string name="assist_reminder_add">কল-ব্যাক রিমাইন্ডার যোগ করুন</string>
+    <string name="assist_reminder_reason_hint">কল ব্যাক করার কারণ…</string>
+    <string name="assist_mark_important">গুরুত্বপূর্ণ কন্টাক্ট</string>
+    <string name="assist_mark_favorite">হোম স্ক্রিনে পিন করুন</string>
+    <string name="assist_badge_local_only">লোকাল মেটাডেটা — ক্লাউডে পাঠানো হয় না</string>
+
+    <!-- Blocklist & Spam -->
+    <string name="blocklist_title">ব্লক করা নম্বর</string>
+    <string name="blocklist_add_number">নম্বর ব্লক করুন</string>
+    <string name="blocklist_number_hint">ফোন নম্বর (+8801… বা 01…)</string>
+    <string name="blocklist_reason_hint">ঐচ্ছিক কারণ (যেমন: অবাঞ্ছিত কল)</string>
+    <string name="block_confirm_title">%1$s ব্লক করবেন?</string>
+    <string name="block_confirm_body">VOZ ডিফল্ট ডায়ালার বা কল স্ক্রিনিং অ্যাপ হিসেবে সেট করা থাকলে এই নম্বরের কল স্বয়ংক্রিয়ভাবে বাতিল হবে।</string>
+    <string name="unblock_action">আনব্লক</string>
+    <string name="block_action">ব্লক করুন</string>
+    <string name="blocked_badge">ব্লকলিস্টে রয়েছে</string>
+
+    <!-- In-Call & Incoming Call -->
+    <string name="incoming_call_label">ইনকামিং কল</string>
+    <string name="ongoing_call_label">চলমান কল</string>
+    <string name="call_state_ringing">রিং হচ্ছে…</string>
+    <string name="call_state_dialing">ডায়াল করা হচ্ছে…</string>
+    <string name="call_state_active">সংযুক্ত</string>
+    <string name="call_state_holding">হোল্ডে আছে</string>
+    <string name="call_state_disconnecting">কল শেষ হচ্ছে…</string>
+    <string name="call_state_disconnected">কল সমাপ্ত</string>
+    <string name="action_answer">রিসিভ করুন</string>
+    <string name="action_decline">কেটে দিন</string>
+    <string name="action_hangup">কল শেষ করুন</string>
+    <string name="action_mute">মিউট</string>
+    <string name="action_speaker">স্পিকার</string>
+    <string name="action_hold">হোল্ড</string>
+    <string name="action_keypad">কীপ্যাড</string>
+
+    <!-- Tools & Settings -->
+    <string name="tools_title">টুলস ও পছন্দসমূহ</string>
+    <string name="role_dialer_card_title">ডিফল্ট ফোন অ্যাপ রোল</string>
+    <string name="role_dialer_active">VOZ আপনার ডিফল্ট ডায়ালার হিসেবে সক্রিয় আছে</string>
+    <string name="role_dialer_inactive">ইন-কল স্ক্রিন ও অটো ব্লকলিস্ট ব্যবহার করতে VOZ-কে ডিফল্ট ডায়ালার হিসেবে সেট করুন।</string>
+    <string name="role_dialer_request_btn">ডিফল্ট ডায়ালার হিসেবে সেট করুন</string>
+    <string name="role_screening_request_btn">কল স্ক্রিনিং চালু করুন</string>
+    <string name="theme_setting_title">থিম ও রঙ</string>
+    <string name="theme_system">সিস্টেম ডিফল্ট</string>
+    <string name="theme_light">এডিটোরিয়াল লাইট</string>
+    <string name="theme_dark">ডিপ চারকোল ডার্ক</string>
+    <string name="language_setting_title">ভাষা (Language)</string>
+    <string name="lang_english">English (ইংরেজি)</string>
+    <string name="lang_bangla">বাংলা (Bangla)</string>
+    <string name="haptics_setting_title">কীপ্যাড ভাইব্রেশন (Haptics)</string>
+    <string name="sound_setting_title">কীপ্যাড সাউন্ড (DTMF)</string>
+    <string name="one_handed_setting_title">এক হাতে ব্যবহারের মোড</string>
+    <string name="reduce_motion_setting_title">অ্যানিমেশন কমান (Reduce Motion)</string>
+    <string name="confirm_before_call_title">কল করার আগে নিশ্চিতকরণ</string>
+    <string name="confirm_before_call_subtitle">ভুলবশত ট্যাপ লেগে কল চলে যাওয়া প্রতিরোধ করে</string>
+    <string name="privacy_policy_title">গোপনীয়তা ও নিরাপত্তা নিশ্চয়তা</string>
+    <string name="privacy_policy_summary">কোনো ইন্টারনেট পারমিশন নেই। কোনো বিজ্ঞাপন বা ট্র্যাকার নেই। আপনার সব তথ্য শুধুমাত্র আপনার ফোনেই সুরক্ষিত থাকে।</string>
+    <string name="diagnostics_title">সিস্টেম ডায়াগনস্টিকস</string>
+    <string name="cancel">বাতিল</string>
+    <string name="confirm">নিশ্চিত করুন</string>
+    <string name="unknown_caller">অপরিচিত নম্বর</string>
+</resources>

@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="utf-8"?>
+<data-extraction-rules>
+    <cloud-backup>
+        <exclude domain="database" path="voz_call_assist.db" />
+        <exclude domain="database" path="voz_call_assist.db-shm" />
+        <exclude domain="database" path="voz_call_assist.db-wal" />
+    </cloud-backup>
+    <device-transfer>
+        <include domain="database" path="voz_call_assist.db" />
+    </device-transfer>
+</data-extraction-rules>
