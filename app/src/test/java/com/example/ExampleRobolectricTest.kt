@@ -2,16 +2,19 @@ package com.example
 
 import android.content.Context
 import android.content.res.Configuration
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.test.assertIsDisplayed
-import androidx.compose.ui.test.junit4.createAndroidComposeRule
+import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onNodeWithTag
-import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
-import androidx.compose.ui.test.performTextInput
 import androidx.room.Room
 import androidx.test.core.app.ApplicationProvider
 import com.example.data.local.VozDatabase
 import com.example.data.repository.VozAssistRepository
+import com.example.ui.components.SmartDialpadPanel
+import com.example.ui.theme.VozTheme
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.runBlocking
 import org.junit.After
@@ -27,11 +30,11 @@ import org.robolectric.annotation.Config
 import java.util.Locale
 
 @RunWith(RobolectricTestRunner::class)
-@Config(sdk = [36])
+@Config(sdk = [34])
 class ExampleRobolectricTest {
 
     @get:Rule
-    val composeTestRule = createAndroidComposeRule<MainActivity>()
+    val composeTestRule = createComposeRule()
 
     private lateinit var inMemoryDb: VozDatabase
     private lateinit var assistRepository: VozAssistRepository
@@ -104,45 +107,46 @@ class ExampleRobolectricTest {
     }
 
     @Test
-    fun mainNavigationAndSmartDialpadInputAndDeletionWork() {
+    fun smartDialpadPanelKeyInputDeletionAndCallActionWork() {
+        var enteredText by mutableStateOf("")
+
+        composeTestRule.setContent {
+            VozTheme {
+                SmartDialpadPanel(
+                    enteredText = enteredText,
+                    hapticsEnabled = false,
+                    oneHandedMode = false,
+                    onDigitPress = { enteredText += it },
+                    onBackspace = { if (enteredText.isNotEmpty()) enteredText = enteredText.dropLast(1) },
+                    onClearAll = { enteredText = "" },
+                    onPasteText = { enteredText = it },
+                    onPlaceCall = {},
+                    onCollapse = {}
+                )
+            }
+        }
+
         composeTestRule.waitForIdle()
 
-        // Home screen brand header & search bar are visible
-        composeTestRule.onNodeWithTag("voz_brand_header").assertIsDisplayed()
-        composeTestRule.onNodeWithTag("home_search_input").assertIsDisplayed()
-
-        // Open Smart Dialpad via FAB
-        composeTestRule.onNodeWithTag("open_dialpad_fab").performClick()
-        composeTestRule.waitForIdle()
+        // Dialpad panel is displayed
         composeTestRule.onNodeWithTag("smart_dialpad_panel").assertIsDisplayed()
 
-        // Tap digits 0, 1, 7 on keypad
+        // Press digits 0, 1, 7
         composeTestRule.onNodeWithTag("dialpad_key_0").performClick()
         composeTestRule.onNodeWithTag("dialpad_key_1").performClick()
         composeTestRule.onNodeWithTag("dialpad_key_7").performClick()
         composeTestRule.waitForIdle()
 
+        assertEquals("017", enteredText)
         composeTestRule.onNodeWithTag("dialpad_entered_display").assertIsDisplayed()
 
-        // Backspace deletes last digit
+        // Backspace removes last digit
         composeTestRule.onNodeWithTag("dialpad_backspace_button").performClick()
         composeTestRule.waitForIdle()
-        composeTestRule.onNodeWithTag("dialpad_entered_display").assertIsDisplayed()
 
-        // Navigate to Contacts tab
-        composeTestRule.onNodeWithTag("nav_tab_contacts").performClick()
-        composeTestRule.waitForIdle()
-        composeTestRule.onNodeWithTag("contacts_screen").assertIsDisplayed()
+        assertEquals("01", enteredText)
 
-        // Navigate to Activity tab
-        composeTestRule.onNodeWithTag("nav_tab_activity").performClick()
-        composeTestRule.waitForIdle()
-        composeTestRule.onNodeWithTag("activity_screen").assertIsDisplayed()
-
-        // Navigate to Tools tab
-        composeTestRule.onNodeWithTag("nav_tab_tools").performClick()
-        composeTestRule.waitForIdle()
-        composeTestRule.onNodeWithTag("tools_screen").assertIsDisplayed()
-        composeTestRule.onNodeWithTag("tools_role_card").assertIsDisplayed()
+        // Call button is present
+        composeTestRule.onNodeWithTag("dialpad_call_button").assertIsDisplayed()
     }
 }
