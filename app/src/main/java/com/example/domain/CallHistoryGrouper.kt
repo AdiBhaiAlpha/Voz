@@ -5,120 +5,101 @@ import java.util.Calendar
 import java.util.Date
 import java.util.Locale
 
-/**
- * Turns raw system call-log entries into a clean, grouped communication timeline.
- * Consecutive calls with the same normalized phone number on the same calendar day are grouped
- * together so repetitive call attempts do not clutter the screen while keeping full access
- * to individual timestamps and durations.
- */
 object CallHistoryGrouper {
 
-    fun groupConsecutiveCalls(
-        records: List<CallRecord>,
-        nowMillis: Long = System.currentTimeMillis(),
-        languageCode: String = "en"
-    ): List<GroupedCallSession> {
+    private val dayFormat = SimpleDateFormat("yyyyMMdd", Locale.US)
+    private val timeFormat = SimpleDateFormat("h:mm a", Locale.getDefault())
+    private val fullDateFormat = SimpleDateFormat("MMM d, yyyy", Locale.getDefault())
+
+    fun groupCallRecords(records: List<CallRecord>): List<GroupedCallSession> {
         if (records.isEmpty()) return emptyList()
 
-        val sorted = records.sortedByDescending { it.timestampMillis }
-        val result = mutableListOf<GroupedCallSession>()
-
+        val grouped = mutableListOf<GroupedCallSession>()
         var currentBatch = mutableListOf<CallRecord>()
-        var currentDayKey = ""
-        var currentNormalized = ""
+        var currentKey = ""
 
-        for (record in sorted) {
-            val dayKey = formatDayBucket(record.timestampMillis, nowMillis, languageCode)
-            val norm = record.normalizedNumber.ifBlank { record.rawNumber }
-
-            val canGroupWithCurrent = currentBatch.isNotEmpty() &&
-                currentDayKey == dayKey &&
-                norm.isNotBlank() &&
-                (currentNormalized == norm || PhoneNormalizer.areNumbersEquivalent(currentNormalized, norm))
-
-            if (canGroupWithCurrent) {
-                currentBatch.add(record)
-            } else {
-                if (currentBatch.isNotEmpty()) {
-                    val head = currentBatch.first()
-                    result.add(
-                        GroupedCallSession(
-                            sessionKey = "${head.id}_${currentBatch.size}",
-                            primaryRecord = head,
-                            records = currentBatch.toList(),
-                            dateHeader = currentDayKey
-                        )
+        fun flushBatch() {
+            if (currentBatch.isNotEmpty()) {
+                val primary = currentBatch.first()
+                val sessionKey = "${primary.normalizedNumber}_${primary.timestampMillis}"
+                val allTypes = currentBatch.map { it.callType }
+                val header = formatDateHeader(primary.timestampMillis)
+                grouped.add(
+                    GroupedCallSession(
+                        sessionKey = sessionKey,
+                        primaryRecord = primary,
+                        totalAttempts = currentBatch.size,
+                        latestTimestampMillis = primary.timestampMillis,
+                        allCallTypes = allTypes,
+                        dateHeader = header
                     )
-                }
-                currentBatch = mutableListOf(record)
-                currentDayKey = dayKey
-                currentNormalized = norm
+                )
+                currentBatch = mutableListOf()
             }
         }
 
-        if (currentBatch.isNotEmpty()) {
-            val head = currentBatch.first()
-            result.add(
-                GroupedCallSession(
-                    sessionKey = "${head.id}_${currentBatch.size}",
-                    primaryRecord = head,
-                    records = currentBatch.toList(),
-                    dateHeader = currentDayKey
-                )
-            )
-        }
+        val recordCal = Calendar.getInstance()
 
-        return result
+        for (record in records) {
+            recordCal.timeInMillis = record.timestampMillis
+            val dayKey = dayFormat.format(Date(record.timestampMillis))
+            val numberKey = record.normalizedNumber.ifBlank { record.rawNumber }
+            val batchKey = "${numberKey}_$dayKey"
+
+            if (currentBatch.isEmpty()) {
+                currentKey = batchKey
+                currentBatch.add(record)
+            } else if (currentKey == batchKey) {
+                currentBatch.add(record)
+            } else {
+                flushBatch()
+                currentKey = batchKey
+                currentBatch.add(record)
+            }
+        }
+        flushBatch()
+
+        return grouped
     }
 
-    fun formatDayBucket(timestampMillis: Long, nowMillis: Long, languageCode: String): String {
-        val isBangla = languageCode.startsWith("bn")
-        val calNow = Calendar.getInstance().apply { timeInMillis = nowMillis }
-        val calTarget = Calendar.getInstance().apply { timeInMillis = timestampMillis }
+    fun formatDateHeader(timestampMillis: Long): String {
+        val now = Calendar.getInstance()
+        val then = Calendar.getInstance().apply { timeInMillis = timestampMillis }
 
-        val sameYear = calNow.get(Calendar.YEAR) == calTarget.get(Calendar.YEAR)
-        val sameDay = sameYear && calNow.get(Calendar.DAY_OF_YEAR) == calTarget.get(Calendar.DAY_OF_YEAR)
-        if (sameDay) {
-            return if (isBangla) "আজ" else "Today"
+        return when {
+            isSameDay(now, then) -> "Today"
+            isYesterday(now, then) -> "Yesterday"
+            now.get(Calendar.WEEK_OF_YEAR) == then.get(Calendar.WEEK_OF_YEAR) &&
+                    now.get(Calendar.YEAR) == then.get(Calendar.YEAR) -> {
+                SimpleDateFormat("EEEE", Locale.getDefault()).format(Date(timestampMillis))
+            }
+            else -> fullDateFormat.format(Date(timestampMillis))
         }
-
-        val calYesterday = (calNow.clone() as Calendar).apply { add(Calendar.DAY_OF_YEAR, -1) }
-        val isYesterday = calYesterday.get(Calendar.YEAR) == calTarget.get(Calendar.YEAR) &&
-            calYesterday.get(Calendar.DAY_OF_YEAR) == calTarget.get(Calendar.DAY_OF_YEAR)
-        if (isYesterday) {
-            return if (isBangla) "গতকাল" else "Yesterday"
-        }
-
-        val locale = if (isBangla) Locale.forLanguageTag("bn-BD") else Locale.US
-        val pattern = if (sameYear) "EEE, d MMM" else "d MMM yyyy"
-        val formatted = SimpleDateFormat(pattern, locale).format(Date(timestampMillis))
-        return if (isBangla) PhoneNormalizer.convertAsciiDigitsToBangla(formatted) else formatted
     }
 
-    fun formatTime(timestampMillis: Long, languageCode: String = "en"): String {
-        val isBangla = languageCode.startsWith("bn")
-        val locale = if (isBangla) Locale.forLanguageTag("bn-BD") else Locale.US
-        val formatted = SimpleDateFormat("h:mm a", locale).format(Date(timestampMillis))
-        return if (isBangla) PhoneNormalizer.convertAsciiDigitsToBangla(formatted) else formatted
+    fun formatCallTime(timestampMillis: Long): String {
+        return timeFormat.format(Date(timestampMillis))
     }
 
-    fun formatDuration(durationSeconds: Long, languageCode: String = "en"): String {
-        val isBangla = languageCode.startsWith("bn")
-        if (durationSeconds <= 0L) return if (isBangla) "০ সেকেন্ড" else "0s"
+    fun formatDuration(durationSeconds: Long): String {
+        if (durationSeconds <= 0) return "0s"
         val hours = durationSeconds / 3600
         val minutes = (durationSeconds % 3600) / 60
         val seconds = durationSeconds % 60
-        val raw = when {
-            hours > 0 -> "${hours}h ${minutes}m ${seconds}s"
-            minutes > 0 -> "${minutes}m ${seconds}s"
-            else -> "${seconds}s"
+        return when {
+            hours > 0 -> String.format(Locale.getDefault(), "%dh %dm %ds", hours, minutes, seconds)
+            minutes > 0 -> String.format(Locale.getDefault(), "%dm %ds", minutes, seconds)
+            else -> String.format(Locale.getDefault(), "%ds", seconds)
         }
-        return if (isBangla) {
-            PhoneNormalizer.convertAsciiDigitsToBangla(
-                raw.replace("h", " ঘণ্টা").replace("m", " মি.").replace("s", " সে.")
-            )
-        } else {
-            raw
-        }
+    }
+
+    private fun isSameDay(cal1: Calendar, cal2: Calendar): Boolean {
+        return cal1.get(Calendar.YEAR) == cal2.get(Calendar.YEAR) &&
+                cal1.get(Calendar.DAY_OF_YEAR) == cal2.get(Calendar.DAY_OF_YEAR)
+    }
+
+    private fun isYesterday(today: Calendar, other: Calendar): Boolean {
+        val yesterday = (today.clone() as Calendar).apply { add(Calendar.DAY_OF_YEAR, -1) }
+        return isSameDay(yesterday, other)
     }
 }

@@ -1,24 +1,20 @@
 package com.example.data.preferences
 
 import android.content.Context
-import androidx.datastore.core.DataStore
-import androidx.datastore.preferences.core.Preferences
-import androidx.datastore.preferences.core.booleanPreferencesKey
-import androidx.datastore.preferences.core.edit
-import androidx.datastore.preferences.core.emptyPreferences
-import androidx.datastore.preferences.core.stringPreferencesKey
-import androidx.datastore.preferences.preferencesDataStore
-import com.example.ui.theme.ThemeMode
+import android.content.SharedPreferences
+import kotlinx.coroutines.channels.awaitClose
 import kotlinx.coroutines.flow.Flow
-import kotlinx.coroutines.flow.catch
-import kotlinx.coroutines.flow.map
-import java.io.IOException
+import kotlinx.coroutines.flow.callbackFlow
 
-private val Context.vozDataStore: DataStore<Preferences> by preferencesDataStore(name = "voz_user_preferences")
+enum class ThemeMode {
+    SYSTEM,
+    LIGHT,
+    DARK
+}
 
 data class VozUserPreferences(
     val themeMode: ThemeMode = ThemeMode.SYSTEM,
-    val languageCode: String = "en",
+    val languageCode: String = "en", // "en" or "bn"
     val hapticFeedbackEnabled: Boolean = true,
     val dialpadSoundEnabled: Boolean = true,
     val preferredSimId: String = "",
@@ -27,71 +23,66 @@ data class VozUserPreferences(
     val confirmBeforeCallEnabled: Boolean = false
 )
 
-class UserPreferencesRepository(private val context: Context) {
+class UserPreferencesRepository(context: Context) {
 
-    private object Keys {
-        val THEME_MODE = stringPreferencesKey("theme_mode")
-        val LANGUAGE_CODE = stringPreferencesKey("language_code")
-        val HAPTIC_FEEDBACK = booleanPreferencesKey("haptic_feedback")
-        val DIALPAD_SOUND = booleanPreferencesKey("dialpad_sound")
-        val PREFERRED_SIM_ID = stringPreferencesKey("preferred_sim_id")
-        val ONE_HANDED_MODE = booleanPreferencesKey("one_handed_mode")
-        val REDUCE_MOTION = booleanPreferencesKey("reduce_motion")
-        val CONFIRM_BEFORE_CALL = booleanPreferencesKey("confirm_before_call")
-    }
+    private val prefs: SharedPreferences =
+        context.getSharedPreferences("voz_user_preferences", Context.MODE_PRIVATE)
 
-    val preferencesFlow: Flow<VozUserPreferences> = context.vozDataStore.data
-        .catch { exception ->
-            if (exception is IOException) {
-                emit(emptyPreferences())
-            } else {
-                throw exception
-            }
+    val preferencesFlow: Flow<VozUserPreferences> = callbackFlow {
+        val listener = SharedPreferences.OnSharedPreferenceChangeListener { _, _ ->
+            trySend(loadPreferences())
         }
-        .map { prefs ->
-            val themeName = prefs[Keys.THEME_MODE] ?: ThemeMode.SYSTEM.name
-            val theme = runCatching { ThemeMode.valueOf(themeName) }.getOrDefault(ThemeMode.SYSTEM)
-            VozUserPreferences(
-                themeMode = theme,
-                languageCode = prefs[Keys.LANGUAGE_CODE] ?: "en",
-                hapticFeedbackEnabled = prefs[Keys.HAPTIC_FEEDBACK] ?: true,
-                dialpadSoundEnabled = prefs[Keys.DIALPAD_SOUND] ?: true,
-                preferredSimId = prefs[Keys.PREFERRED_SIM_ID] ?: "",
-                oneHandedModeEnabled = prefs[Keys.ONE_HANDED_MODE] ?: false,
-                reduceMotionEnabled = prefs[Keys.REDUCE_MOTION] ?: false,
-                confirmBeforeCallEnabled = prefs[Keys.CONFIRM_BEFORE_CALL] ?: false
-            )
+        prefs.registerOnSharedPreferenceChangeListener(listener)
+        trySend(loadPreferences())
+        awaitClose {
+            prefs.unregisterOnSharedPreferenceChangeListener(listener)
         }
-
-    suspend fun setThemeMode(mode: ThemeMode) {
-        context.vozDataStore.edit { it[Keys.THEME_MODE] = mode.name }
     }
 
-    suspend fun setLanguageCode(code: String) {
-        context.vozDataStore.edit { it[Keys.LANGUAGE_CODE] = code }
+    fun loadPreferences(): VozUserPreferences {
+        val themeStr = prefs.getString("theme_mode", ThemeMode.SYSTEM.name) ?: ThemeMode.SYSTEM.name
+        val theme = runCatching { ThemeMode.valueOf(themeStr) }.getOrDefault(ThemeMode.SYSTEM)
+        return VozUserPreferences(
+            themeMode = theme,
+            languageCode = prefs.getString("language_code", "en") ?: "en",
+            hapticFeedbackEnabled = prefs.getBoolean("haptic_feedback", true),
+            dialpadSoundEnabled = prefs.getBoolean("dialpad_sound", true),
+            preferredSimId = prefs.getString("preferred_sim_id", "") ?: "",
+            oneHandedModeEnabled = prefs.getBoolean("one_handed", false),
+            reduceMotionEnabled = prefs.getBoolean("reduce_motion", false),
+            confirmBeforeCallEnabled = prefs.getBoolean("confirm_before_call", false)
+        )
     }
 
-    suspend fun setHapticFeedback(enabled: Boolean) {
-        context.vozDataStore.edit { it[Keys.HAPTIC_FEEDBACK] = enabled }
+    fun setThemeMode(mode: ThemeMode) {
+        prefs.edit().putString("theme_mode", mode.name).apply()
     }
 
-    suspend fun setDialpadSound(enabled: Boolean) {
-        context.vozDataStore.edit { it[Keys.DIALPAD_SOUND] = enabled }
+    fun setLanguageCode(code: String) {
+        prefs.edit().putString("language_code", code).apply()
     }
 
-    suspend fun setPreferredSimId(simId: String) {
-        context.vozDataStore.edit { it[Keys.PREFERRED_SIM_ID] = simId }
+    fun setHapticFeedback(enabled: Boolean) {
+        prefs.edit().putBoolean("haptic_feedback", enabled).apply()
     }
 
-    suspend fun setOneHandedMode(enabled: Boolean) {
-        context.vozDataStore.edit { it[Keys.ONE_HANDED_MODE] = enabled }
+    fun setDialpadSound(enabled: Boolean) {
+        prefs.edit().putBoolean("dialpad_sound", enabled).apply()
     }
 
-    suspend fun setReduceMotion(enabled: Boolean) {
-        context.vozDataStore.edit { it[Keys.REDUCE_MOTION] = enabled }
+    fun setPreferredSimId(simId: String) {
+        prefs.edit().putString("preferred_sim_id", simId).apply()
     }
 
-    suspend fun setConfirmBeforeCall(enabled: Boolean) {
-        context.vozDataStore.edit { it[Keys.CONFIRM_BEFORE_CALL] = enabled }
+    fun setOneHandedMode(enabled: Boolean) {
+        prefs.edit().putBoolean("one_handed", enabled).apply()
+    }
+
+    fun setReduceMotion(enabled: Boolean) {
+        prefs.edit().putBoolean("reduce_motion", enabled).apply()
+    }
+
+    fun setConfirmBeforeCall(enabled: Boolean) {
+        prefs.edit().putBoolean("confirm_before_call", enabled).apply()
     }
 }

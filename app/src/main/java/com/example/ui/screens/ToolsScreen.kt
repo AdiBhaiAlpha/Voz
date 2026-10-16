@@ -1,11 +1,7 @@
 package com.example.ui.screens
 
-import android.os.Build
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.ExperimentalLayoutApi
-import androidx.compose.foundation.layout.FlowRow
-import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
@@ -16,21 +12,26 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.AddModerator
+import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.icons.filled.Alarm
 import androidx.compose.material.icons.filled.Block
+import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.CheckCircle
+import androidx.compose.material.icons.filled.Delete
+import androidx.compose.material.icons.filled.Info
+import androidx.compose.material.icons.filled.Phone
 import androidx.compose.material.icons.filled.Security
-import androidx.compose.material.icons.filled.SimCard
-import androidx.compose.material.icons.outlined.Info
+import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
-import androidx.compose.material3.FilterChip
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
@@ -41,446 +42,358 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
-import com.example.BuildConfig
 import com.example.R
+import com.example.data.preferences.ThemeMode
+import com.example.domain.CallHistoryGrouper
 import com.example.domain.PhoneNormalizer
 import com.example.ui.VozUiState
-import com.example.ui.theme.JetBrainsMonoFontFamily
-import com.example.ui.theme.ThemeMode
 
-@OptIn(ExperimentalLayoutApi::class)
 @Composable
 fun ToolsScreen(
     uiState: VozUiState,
-    onRequestDefaultDialerRole: () -> Unit,
-    onRequestCallScreeningRole: () -> Unit,
-    onBlockNumber: (number: String, reason: String) -> Unit,
-    onUnblockNumber: (String) -> Unit,
-    onThemeModeChange: (ThemeMode) -> Unit,
+    onRequestDefaultDialer: () -> Unit,
+    onRequestCallScreening: () -> Unit,
+    onThemeChange: (ThemeMode) -> Unit,
     onLanguageChange: (String) -> Unit,
-    onHapticsChange: (Boolean) -> Unit,
+    onHapticChange: (Boolean) -> Unit,
     onSoundChange: (Boolean) -> Unit,
-    onOneHandedChange: (Boolean) -> Unit,
-    onReduceMotionChange: (Boolean) -> Unit,
     onConfirmBeforeCallChange: (Boolean) -> Unit,
     onPreferredSimChange: (String) -> Unit,
+    onBlockNumber: (rawNumber: String, reason: String) -> Unit,
+    onUnblockNumber: (normalizedNumber: String) -> Unit,
+    onCompleteReminder: (Long) -> Unit,
+    onDeleteReminder: (Long) -> Unit,
     modifier: Modifier = Modifier
 ) {
-    var blockInputNumber by rememberSaveable { mutableStateOf("") }
-    var blockInputReason by rememberSaveable { mutableStateOf("") }
-    var pendingBlockConfirmation by remember { mutableStateOf<Pair<String, String>?>(null) }
-
-    pendingBlockConfirmation?.let { (num, reason) ->
-        AlertDialog(
-            onDismissRequest = { pendingBlockConfirmation = null },
-            title = { Text(stringResource(R.string.block_confirm_title, num)) },
-            text = { Text(stringResource(R.string.block_confirm_body)) },
-            confirmButton = {
-                Button(
-                    onClick = {
-                        pendingBlockConfirmation = null
-                        onBlockNumber(num, reason)
-                        blockInputNumber = ""
-                        blockInputReason = ""
-                    },
-                    colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.error),
-                    modifier = Modifier.testTag("tools_confirm_block_button")
-                ) {
-                    Text(stringResource(R.string.block_action))
-                }
-            },
-            dismissButton = {
-                TextButton(onClick = { pendingBlockConfirmation = null }) {
-                    Text(stringResource(R.string.cancel))
-                }
-            }
-        )
-    }
+    var showAddBlockDialog by remember { mutableStateOf(false) }
 
     LazyColumn(
         modifier = modifier
             .fillMaxSize()
-            .padding(horizontal = 16.dp)
-            .testTag("tools_screen"),
-        contentPadding = PaddingValues(top = 12.dp, bottom = 96.dp),
-        verticalArrangement = Arrangement.spacedBy(14.dp)
+            .padding(horizontal = 16.dp),
+        verticalArrangement = Arrangement.spacedBy(16.dp)
     ) {
-        item(key = "tools_header") {
+        item {
+            Spacer(modifier = Modifier.height(8.dp))
             Text(
                 text = stringResource(R.string.tools_title),
-                style = MaterialTheme.typography.headlineLarge,
-                color = MaterialTheme.colorScheme.onBackground
+                style = MaterialTheme.typography.headlineMedium,
+                fontWeight = FontWeight.Bold
             )
         }
 
-        // 1. Default Dialer & Call Screening Role Setup Card
-        item(key = "role_management_card") {
+        // Default Dialer Role Card
+        item {
             Card(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .testTag("tools_role_card"),
-                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
-                shape = MaterialTheme.shapes.large
+                    .testTag("dialer_role_card"),
+                colors = CardDefaults.cardColors(
+                    containerColor = if (uiState.isDefaultDialer) Color(0xFFE8F5E9) else MaterialTheme.colorScheme.primaryContainer
+                ),
+                shape = RoundedCornerShape(16.dp)
             ) {
-                Column(modifier = Modifier.padding(18.dp)) {
+                Column(modifier = Modifier.padding(16.dp)) {
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         Icon(
-                            imageVector = if (uiState.isDefaultDialer) Icons.Filled.CheckCircle else Icons.Filled.Security,
+                            imageVector = if (uiState.isDefaultDialer) Icons.Default.CheckCircle else Icons.Default.Phone,
                             contentDescription = null,
-                            tint = MaterialTheme.colorScheme.primary
+                            tint = if (uiState.isDefaultDialer) Color(0xFF2E7D32) else MaterialTheme.colorScheme.primary
                         )
-                        Spacer(modifier = Modifier.width(10.dp))
+                        Spacer(modifier = Modifier.width(8.dp))
                         Text(
                             text = stringResource(R.string.role_dialer_card_title),
                             style = MaterialTheme.typography.titleMedium,
-                            color = MaterialTheme.colorScheme.onSurface
+                            fontWeight = FontWeight.Bold
                         )
                     }
                     Spacer(modifier = Modifier.height(6.dp))
                     Text(
-                        text = if (uiState.isDefaultDialer) {
-                            stringResource(R.string.role_dialer_active)
-                        } else {
-                            stringResource(R.string.role_dialer_inactive)
-                        },
+                        text = if (uiState.isDefaultDialer) stringResource(R.string.role_dialer_active)
+                        else stringResource(R.string.role_dialer_inactive),
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
-                    Spacer(modifier = Modifier.height(12.dp))
-                    FlowRow(
-                        horizontalArrangement = Arrangement.spacedBy(10.dp),
-                        verticalArrangement = Arrangement.spacedBy(8.dp)
-                    ) {
-                        if (!uiState.isDefaultDialer) {
-                            Button(
-                                onClick = onRequestDefaultDialerRole,
-                                modifier = Modifier.testTag("request_default_dialer_button"),
-                                colors = ButtonDefaults.buttonColors(
-                                    containerColor = MaterialTheme.colorScheme.primaryContainer,
-                                    contentColor = MaterialTheme.colorScheme.onPrimaryContainer
-                                )
-                            ) {
-                                Text(
-                                    text = stringResource(R.string.role_dialer_request_btn),
-                                    fontWeight = FontWeight.Bold
-                                )
-                            }
-                        }
-                        if (!uiState.isCallScreeningEnabled) {
-                            OutlinedButton(
-                                onClick = onRequestCallScreeningRole,
-                                modifier = Modifier.testTag("request_call_screening_button")
-                            ) {
-                                Text(text = stringResource(R.string.role_screening_request_btn))
-                            }
+                    if (!uiState.isDefaultDialer) {
+                        Spacer(modifier = Modifier.height(12.dp))
+                        Button(
+                            onClick = onRequestDefaultDialer,
+                            modifier = Modifier.testTag("set_default_dialer_btn")
+                        ) {
+                            Text(stringResource(R.string.role_dialer_request_btn))
                         }
                     }
                 }
             }
         }
 
-        // 2. User-Managed Blocked Numbers (Spam & Unwanted Callers)
-        item(key = "blocklist_management_card") {
+        // Call Screening Role Card
+        item {
             Card(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .testTag("tools_blocklist_card"),
-                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
-                shape = MaterialTheme.shapes.large
+                    .testTag("screening_role_card"),
+                colors = CardDefaults.cardColors(
+                    containerColor = if (uiState.isCallScreeningRoleHeld) Color(0xFFE8F5E9) else MaterialTheme.colorScheme.surfaceVariant
+                ),
+                shape = RoundedCornerShape(16.dp)
             ) {
-                Column(modifier = Modifier.padding(18.dp)) {
+                Column(modifier = Modifier.padding(16.dp)) {
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         Icon(
-                            imageVector = Icons.Filled.AddModerator,
+                            imageVector = Icons.Default.Security,
                             contentDescription = null,
-                            tint = MaterialTheme.colorScheme.primary
+                            tint = if (uiState.isCallScreeningRoleHeld) Color(0xFF2E7D32) else MaterialTheme.colorScheme.primary
                         )
-                        Spacer(modifier = Modifier.width(10.dp))
+                        Spacer(modifier = Modifier.width(8.dp))
                         Text(
-                            text = "${stringResource(R.string.blocklist_title)} (${uiState.blockedNumbers.size})",
+                            text = "Automatic Call Screening",
                             style = MaterialTheme.typography.titleMedium,
-                            color = MaterialTheme.colorScheme.onSurface
+                            fontWeight = FontWeight.Bold
                         )
                     }
                     Spacer(modifier = Modifier.height(6.dp))
                     Text(
-                        text = stringResource(R.string.block_confirm_body),
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                        text = if (uiState.isCallScreeningRoleHeld) "Call screening is active. Blocked numbers will be dropped automatically."
+                        else "Enable Call Screening to automatically block unwanted spam and nuisance calls before your phone rings.",
+                        style = MaterialTheme.typography.bodySmall
                     )
-                    Spacer(modifier = Modifier.height(12.dp))
-
-                    OutlinedTextField(
-                        value = blockInputNumber,
-                        onValueChange = { blockInputNumber = it },
-                        label = { Text(stringResource(R.string.blocklist_number_hint)) },
-                        singleLine = true,
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .testTag("blocklist_number_input")
-                    )
-                    Spacer(modifier = Modifier.height(8.dp))
-                    OutlinedTextField(
-                        value = blockInputReason,
-                        onValueChange = { blockInputReason = it },
-                        label = { Text(stringResource(R.string.blocklist_reason_hint)) },
-                        singleLine = true,
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .testTag("blocklist_reason_input")
-                    )
-                    Spacer(modifier = Modifier.height(10.dp))
-                    Button(
-                        onClick = {
-                            val norm = PhoneNormalizer.normalizeForComparison(blockInputNumber)
-                            if (norm.isNotEmpty()) {
-                                pendingBlockConfirmation = blockInputNumber.trim() to blockInputReason.trim()
-                            }
-                        },
-                        enabled = PhoneNormalizer.normalizeForComparison(blockInputNumber).isNotEmpty(),
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .testTag("blocklist_add_button")
-                    ) {
-                        Icon(imageVector = Icons.Filled.Block, contentDescription = null)
-                        Spacer(modifier = Modifier.width(8.dp))
-                        Text(text = stringResource(R.string.blocklist_add_number))
+                    if (!uiState.isCallScreeningRoleHeld) {
+                        Spacer(modifier = Modifier.height(12.dp))
+                        OutlinedButton(
+                            onClick = onRequestCallScreening,
+                            modifier = Modifier.testTag("set_screening_role_btn")
+                        ) {
+                            Text(stringResource(R.string.role_screening_request_btn))
+                        }
                     }
                 }
             }
         }
 
-        if (uiState.blockedNumbers.isNotEmpty()) {
-            items(
-                items = uiState.blockedNumbers,
-                key = { "blocked_${it.normalizedNumber}" }
-            ) { blocked ->
-                Card(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .testTag("blocked_item_${blocked.normalizedNumber}"),
-                    colors = CardDefaults.cardColors(
-                        containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.6f)
+        // Call-Back Reminders
+        if (uiState.reminders.isNotEmpty()) {
+            item {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Icon(Icons.Filled.Alarm, contentDescription = null, tint = MaterialTheme.colorScheme.primary)
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Text(
+                        text = stringResource(R.string.section_reminders),
+                        style = MaterialTheme.typography.titleMedium,
+                        fontWeight = FontWeight.Bold
                     )
+                }
+            }
+
+            items(uiState.reminders, key = { it.id }) { reminder ->
+                Card(
+                    modifier = Modifier.fillMaxWidth(),
+                    shape = RoundedCornerShape(12.dp),
+                    colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.tertiaryContainer.copy(alpha = 0.5f))
                 ) {
                     Row(
                         modifier = Modifier
                             .fillMaxWidth()
-                            .padding(horizontal = 16.dp, vertical = 12.dp),
+                            .padding(12.dp),
                         verticalAlignment = Alignment.CenterVertically,
                         horizontalArrangement = Arrangement.SpaceBetween
                     ) {
                         Column(modifier = Modifier.weight(1f)) {
+                            Text(text = reminder.contactName, fontWeight = FontWeight.Bold)
+                            Text(text = reminder.reason, style = MaterialTheme.typography.bodySmall)
                             Text(
-                                text = blocked.originalNumber,
-                                style = MaterialTheme.typography.titleMedium.copy(fontFamily = JetBrainsMonoFontFamily),
-                                color = MaterialTheme.colorScheme.onSurface
-                            )
-                            Text(
-                                text = buildString {
-                                    append("Normalized: ${blocked.normalizedNumber}")
-                                    if (blocked.reason.isNotBlank()) append(" • ${blocked.reason}")
-                                },
-                                style = MaterialTheme.typography.bodySmall,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                                text = "Due: ${CallHistoryGrouper.formatCallTime(reminder.scheduledMillis)}",
+                                style = MaterialTheme.typography.labelSmall,
+                                color = MaterialTheme.colorScheme.outline
                             )
                         }
-                        OutlinedButton(
-                            onClick = { onUnblockNumber(blocked.normalizedNumber) },
-                            modifier = Modifier.testTag("unblock_btn_${blocked.normalizedNumber}")
-                        ) {
-                            Text(text = stringResource(R.string.unblock_action))
-                        }
-                    }
-                }
-            }
-        }
 
-        // 3. Appearance & Localization Settings Card
-        item(key = "appearance_and_language_card") {
-            Card(
-                modifier = Modifier.fillMaxWidth(),
-                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
-                shape = MaterialTheme.shapes.large
-            ) {
-                Column(modifier = Modifier.padding(18.dp)) {
-                    Text(
-                        text = stringResource(R.string.theme_setting_title),
-                        style = MaterialTheme.typography.titleMedium,
-                        color = MaterialTheme.colorScheme.onSurface
-                    )
-                    Spacer(modifier = Modifier.height(8.dp))
-                    FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                        FilterChip(
-                            selected = uiState.preferences.themeMode == ThemeMode.SYSTEM,
-                            onClick = { onThemeModeChange(ThemeMode.SYSTEM) },
-                            label = { Text(stringResource(R.string.theme_system)) },
-                            modifier = Modifier.testTag("theme_chip_system")
-                        )
-                        FilterChip(
-                            selected = uiState.preferences.themeMode == ThemeMode.LIGHT,
-                            onClick = { onThemeModeChange(ThemeMode.LIGHT) },
-                            label = { Text(stringResource(R.string.theme_light)) },
-                            modifier = Modifier.testTag("theme_chip_light")
-                        )
-                        FilterChip(
-                            selected = uiState.preferences.themeMode == ThemeMode.DARK,
-                            onClick = { onThemeModeChange(ThemeMode.DARK) },
-                            label = { Text(stringResource(R.string.theme_dark)) },
-                            modifier = Modifier.testTag("theme_chip_dark")
-                        )
-                    }
-
-                    Spacer(modifier = Modifier.height(14.dp))
-                    HorizontalDivider()
-                    Spacer(modifier = Modifier.height(14.dp))
-
-                    Text(
-                        text = stringResource(R.string.language_setting_title),
-                        style = MaterialTheme.typography.titleMedium,
-                        color = MaterialTheme.colorScheme.onSurface
-                    )
-                    Spacer(modifier = Modifier.height(8.dp))
-                    FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                        FilterChip(
-                            selected = uiState.preferences.languageCode == "en",
-                            onClick = { onLanguageChange("en") },
-                            label = { Text(stringResource(R.string.lang_english)) },
-                            modifier = Modifier.testTag("lang_chip_en")
-                        )
-                        FilterChip(
-                            selected = uiState.preferences.languageCode == "bn",
-                            onClick = { onLanguageChange("bn") },
-                            label = { Text(stringResource(R.string.lang_bangla)) },
-                            modifier = Modifier.testTag("lang_chip_bn")
-                        )
-                    }
-                }
-            }
-        }
-
-        // 4. Multi-SIM Selection Preference (shown when device exposes SIM accounts)
-        item(key = "sim_preference_card") {
-            Card(
-                modifier = Modifier.fillMaxWidth(),
-                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
-                shape = MaterialTheme.shapes.large
-            ) {
-                Column(modifier = Modifier.padding(18.dp)) {
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        Icon(
-                            imageVector = Icons.Filled.SimCard,
-                            contentDescription = null,
-                            tint = MaterialTheme.colorScheme.primary
-                        )
-                        Spacer(modifier = Modifier.width(10.dp))
-                        Text(
-                            text = "SIM & Calling Preferences",
-                            style = MaterialTheme.typography.titleMedium,
-                            color = MaterialTheme.colorScheme.onSurface
-                        )
-                    }
-                    Spacer(modifier = Modifier.height(8.dp))
-                    if (uiState.availableSims.isEmpty()) {
-                        Text(
-                            text = "Single SIM or default system SIM routing active. On dual-SIM devices with Phone State permission granted, VOZ lets you pin a preferred SIM or ask before every call.",
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
-                        )
-                    } else {
-                        FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                            FilterChip(
-                                selected = uiState.preferences.preferredSimId.isEmpty(),
-                                onClick = { onPreferredSimChange("") },
-                                label = { Text("Ask Every Time") }
-                            )
-                            uiState.availableSims.forEach { sim ->
-                                FilterChip(
-                                    selected = uiState.preferences.preferredSimId == sim.id,
-                                    onClick = { onPreferredSimChange(sim.id) },
-                                    label = { Text("${sim.label} (${sim.carrierName})") }
-                                )
+                        Row {
+                            IconButton(onClick = { onCompleteReminder(reminder.id) }) {
+                                Icon(Icons.Filled.Check, contentDescription = "Done", tint = Color(0xFF2E7D32))
+                            }
+                            IconButton(onClick = { onDeleteReminder(reminder.id) }) {
+                                Icon(Icons.Filled.Delete, contentDescription = "Delete", tint = MaterialTheme.colorScheme.error)
                             }
                         }
                     }
-
-                    Spacer(modifier = Modifier.height(12.dp))
-                    HorizontalDivider()
-                    Spacer(modifier = Modifier.height(8.dp))
-
-                    PreferenceToggleRow(
-                        title = stringResource(R.string.confirm_before_call_title),
-                        subtitle = stringResource(R.string.confirm_before_call_subtitle),
-                        checked = uiState.preferences.confirmBeforeCallEnabled,
-                        testTag = "toggle_confirm_before_call",
-                        onCheckedChange = onConfirmBeforeCallChange
-                    )
-
-                    PreferenceToggleRow(
-                        title = stringResource(R.string.haptics_setting_title),
-                        subtitle = "Tactile vibration feedback when pressing dialpad keys",
-                        checked = uiState.preferences.hapticFeedbackEnabled,
-                        testTag = "toggle_haptics",
-                        onCheckedChange = onHapticsChange
-                    )
-
-                    PreferenceToggleRow(
-                        title = stringResource(R.string.sound_setting_title),
-                        subtitle = "Play standard DTMF audio tones on keypad input",
-                        checked = uiState.preferences.dialpadSoundEnabled,
-                        testTag = "toggle_dtmf_sound",
-                        onCheckedChange = onSoundChange
-                    )
-
-                    PreferenceToggleRow(
-                        title = stringResource(R.string.one_handed_setting_title),
-                        subtitle = "Shift dialpad to a thumb-friendly compact width",
-                        checked = uiState.preferences.oneHandedModeEnabled,
-                        testTag = "toggle_one_handed",
-                        onCheckedChange = onOneHandedChange
-                    )
-
-                    PreferenceToggleRow(
-                        title = stringResource(R.string.reduce_motion_setting_title),
-                        subtitle = "Minimize screen transitions for accessibility comfort",
-                        checked = uiState.preferences.reduceMotionEnabled,
-                        testTag = "toggle_reduce_motion",
-                        onCheckedChange = onReduceMotionChange
-                    )
                 }
             }
         }
 
-        // 5. Privacy Policy & Diagnostic Information (Excludes sensitive personal data)
-        item(key = "privacy_and_diagnostics_card") {
+        // Blocklist Section
+        item {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.SpaceBetween
+            ) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Icon(Icons.Filled.Block, contentDescription = null, tint = MaterialTheme.colorScheme.error)
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Text(
+                        text = stringResource(R.string.blocklist_title),
+                        style = MaterialTheme.typography.titleMedium,
+                        fontWeight = FontWeight.Bold
+                    )
+                }
+
+                TextButton(
+                    onClick = { showAddBlockDialog = true },
+                    modifier = Modifier.testTag("add_blocked_number_btn")
+                ) {
+                    Icon(Icons.Filled.Add, contentDescription = null, modifier = Modifier.size(16.dp))
+                    Spacer(modifier = Modifier.width(4.dp))
+                    Text("Add")
+                }
+            }
+        }
+
+        if (uiState.blockedNumbers.isEmpty()) {
+            item {
+                Text(
+                    text = "No numbers currently blocked.",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
+        } else {
+            items(uiState.blockedNumbers, key = { it.normalizedNumber }) { item ->
+                Card(
+                    modifier = Modifier.fillMaxWidth(),
+                    shape = RoundedCornerShape(12.dp),
+                    colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f))
+                ) {
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(12.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.SpaceBetween
+                    ) {
+                        Column {
+                            Text(
+                                text = PhoneNormalizer.formatForDisplay(item.rawNumber),
+                                fontWeight = FontWeight.Bold
+                            )
+                            if (item.labelOrReason.isNotBlank()) {
+                                Text(
+                                    text = item.labelOrReason,
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                )
+                            }
+                        }
+
+                        TextButton(
+                            onClick = { onUnblockNumber(item.normalizedNumber) },
+                            modifier = Modifier.testTag("unblock_btn_${item.normalizedNumber}")
+                        ) {
+                            Text(stringResource(R.string.unblock_action))
+                        }
+                    }
+                }
+            }
+        }
+
+        // Settings / Preferences Section
+        item {
+            Text(
+                text = "Preferences",
+                style = MaterialTheme.typography.titleMedium,
+                fontWeight = FontWeight.Bold,
+                color = MaterialTheme.colorScheme.primary
+            )
+        }
+
+        // Dialpad Sound Toggle
+        item {
+            SettingSwitchRow(
+                title = stringResource(R.string.sound_setting_title),
+                checked = uiState.preferences.dialpadSoundEnabled,
+                onCheckedChange = onSoundChange
+            )
+        }
+
+        // Dialpad Haptic Toggle
+        item {
+            SettingSwitchRow(
+                title = stringResource(R.string.haptics_setting_title),
+                checked = uiState.preferences.hapticFeedbackEnabled,
+                onCheckedChange = onHapticChange
+            )
+        }
+
+        // Confirm Before Call Toggle
+        item {
+            SettingSwitchRow(
+                title = stringResource(R.string.confirm_before_call_title),
+                subtitle = stringResource(R.string.confirm_before_call_subtitle),
+                checked = uiState.preferences.confirmBeforeCallEnabled,
+                onCheckedChange = onConfirmBeforeCallChange
+            )
+        }
+
+        // Preferred SIM Selection (if multi-SIM)
+        if (uiState.availableSims.size > 1) {
+            item {
+                Column {
+                    Text(
+                        text = "Preferred Calling SIM",
+                        style = MaterialTheme.typography.bodyMedium,
+                        fontWeight = FontWeight.SemiBold
+                    )
+                    Spacer(modifier = Modifier.height(6.dp))
+                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        OutlinedButton(
+                            onClick = { onPreferredSimChange("") },
+                            colors = if (uiState.preferences.preferredSimId.isEmpty()) ButtonDefaults.outlinedButtonColors(containerColor = MaterialTheme.colorScheme.primaryContainer)
+                            else ButtonDefaults.outlinedButtonColors()
+                        ) {
+                            Text("Always Ask")
+                        }
+                        for (sim in uiState.availableSims) {
+                            OutlinedButton(
+                                onClick = { onPreferredSimChange(sim.subscriptionId.toString()) },
+                                colors = if (uiState.preferences.preferredSimId == sim.subscriptionId.toString()) ButtonDefaults.outlinedButtonColors(containerColor = MaterialTheme.colorScheme.primaryContainer)
+                                else ButtonDefaults.outlinedButtonColors()
+                            ) {
+                                Text(sim.displayName)
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
+        // Privacy Guarantee Card
+        item {
             Card(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .testTag("privacy_diagnostics_card"),
-                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
-                shape = MaterialTheme.shapes.large
+                    .padding(vertical = 12.dp),
+                shape = RoundedCornerShape(16.dp),
+                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.6f))
             ) {
-                Column(modifier = Modifier.padding(18.dp)) {
+                Column(modifier = Modifier.padding(16.dp)) {
                     Row(verticalAlignment = Alignment.CenterVertically) {
-                        Icon(
-                            imageVector = Icons.Outlined.Info,
-                            contentDescription = null,
-                            tint = MaterialTheme.colorScheme.primary,
-                            modifier = Modifier.size(20.dp)
-                        )
+                        Icon(Icons.Default.Info, contentDescription = null, tint = MaterialTheme.colorScheme.primary)
                         Spacer(modifier = Modifier.width(8.dp))
                         Text(
                             text = stringResource(R.string.privacy_policy_title),
                             style = MaterialTheme.typography.titleMedium,
-                            color = MaterialTheme.colorScheme.onSurface
+                            fontWeight = FontWeight.Bold
                         )
                     }
                     Spacer(modifier = Modifier.height(6.dp))
@@ -489,68 +402,77 @@ fun ToolsScreen(
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
-
-                    Spacer(modifier = Modifier.height(14.dp))
-                    HorizontalDivider()
-                    Spacer(modifier = Modifier.height(14.dp))
-
-                    Text(
-                        text = stringResource(R.string.diagnostics_title),
-                        style = MaterialTheme.typography.titleSmall,
-                        color = MaterialTheme.colorScheme.onSurface
-                    )
-                    Spacer(modifier = Modifier.height(6.dp))
-                    val diagText = buildString {
-                        appendLine("App Version: ${BuildConfig.VERSION_NAME} (${BuildConfig.VERSION_CODE})")
-                        appendLine("Android SDK: API ${Build.VERSION.SDK_INT} (${Build.VERSION.RELEASE})")
-                        appendLine("Default Dialer Role: ${if (uiState.isDefaultDialer) "GRANTED" else "NOT HELD"}")
-                        appendLine("Call Screening Role: ${if (uiState.isCallScreeningEnabled) "GRANTED" else "NOT HELD"}")
-                        appendLine("Contacts Access: ${if (uiState.hasContactsPermission) "GRANTED" else "DENIED"}")
-                        appendLine("Call Log Access: ${if (uiState.hasCallLogPermission) "GRANTED" else "DENIED"}")
-                        appendLine("Network Permission: NONE (Offline-By-Design)")
-                    }
-                    Text(
-                        text = diagText.trimEnd(),
-                        style = MaterialTheme.typography.labelSmall.copy(fontFamily = JetBrainsMonoFontFamily),
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
                 }
             }
+            Spacer(modifier = Modifier.height(32.dp))
         }
+    }
+
+    if (showAddBlockDialog) {
+        var num by remember { mutableStateOf("") }
+        var reason by remember { mutableStateOf("") }
+
+        AlertDialog(
+            onDismissRequest = { showAddBlockDialog = false },
+            title = { Text(stringResource(R.string.blocklist_add_number)) },
+            text = {
+                Column {
+                    OutlinedTextField(
+                        value = num,
+                        onValueChange = { num = it },
+                        label = { Text(stringResource(R.string.blocklist_number_hint)) },
+                        modifier = Modifier.fillMaxWidth()
+                    )
+                    Spacer(modifier = Modifier.height(8.dp))
+                    OutlinedTextField(
+                        value = reason,
+                        onValueChange = { reason = it },
+                        label = { Text(stringResource(R.string.blocklist_reason_hint)) },
+                        modifier = Modifier.fillMaxWidth()
+                    )
+                }
+            },
+            confirmButton = {
+                Button(
+                    onClick = {
+                        if (num.isNotBlank()) {
+                            onBlockNumber(num, reason)
+                            showAddBlockDialog = false
+                        }
+                    }
+                ) {
+                    Text(stringResource(R.string.confirm))
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { showAddBlockDialog = false }) {
+                    Text(stringResource(R.string.cancel))
+                }
+            }
+        )
     }
 }
 
 @Composable
-private fun PreferenceToggleRow(
+fun SettingSwitchRow(
     title: String,
-    subtitle: String,
+    subtitle: String? = null,
     checked: Boolean,
-    testTag: String,
     onCheckedChange: (Boolean) -> Unit
 ) {
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            .padding(vertical = 6.dp),
+            .padding(vertical = 4.dp),
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.SpaceBetween
     ) {
-        Column(modifier = Modifier.weight(1f).padding(end = 12.dp)) {
-            Text(
-                text = title,
-                style = MaterialTheme.typography.titleSmall,
-                color = MaterialTheme.colorScheme.onSurface
-            )
-            Text(
-                text = subtitle,
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant
-            )
+        Column(modifier = Modifier.weight(1f)) {
+            Text(text = title, style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.SemiBold)
+            if (subtitle != null) {
+                Text(text = subtitle, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            }
         }
-        Switch(
-            checked = checked,
-            onCheckedChange = onCheckedChange,
-            modifier = Modifier.testTag(testTag)
-        )
+        Switch(checked = checked, onCheckedChange = onCheckedChange)
     }
 }

@@ -1,5 +1,14 @@
 package com.example.ui.components
 
+import android.content.ClipData
+import android.content.ClipboardManager
+import android.content.Context
+import android.media.AudioManager
+import android.media.ToneGenerator
+import android.os.Build
+import android.os.VibrationEffect
+import android.os.Vibrator
+import android.os.VibratorManager
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.combinedClickable
@@ -13,16 +22,16 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.outlined.Backspace
+import androidx.compose.material.icons.automirrored.filled.Backspace
 import androidx.compose.material.icons.filled.Call
-import androidx.compose.material.icons.outlined.ContentPaste
-import androidx.compose.material.icons.outlined.KeyboardArrowDown
+import androidx.compose.material.icons.filled.ContentPaste
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
+import androidx.compose.material3.Card
+import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -33,333 +42,325 @@ import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.hapticfeedback.HapticFeedbackType
-import androidx.compose.ui.platform.LocalClipboardManager
-import androidx.compose.ui.platform.LocalHapticFeedback
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.stringResource
-import androidx.compose.ui.semantics.Role
-import androidx.compose.ui.semantics.contentDescription
-import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
-import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import com.example.R
 import com.example.domain.PhoneNormalizer
-import com.example.ui.theme.JetBrainsMonoFontFamily
+import com.example.domain.SimSubscriptionItem
 
-private data class DialpadKeySpec(
+data class DialpadKeySpec(
     val digit: Char,
     val subLabel: String,
     val longPressChar: Char? = null
 )
 
-private val dialpadRows = listOf(
-    listOf(
-        DialpadKeySpec('1', "VOZ"),
-        DialpadKeySpec('2', "ABC"),
-        DialpadKeySpec('3', "DEF")
-    ),
-    listOf(
-        DialpadKeySpec('4', "GHI"),
-        DialpadKeySpec('5', "JKL"),
-        DialpadKeySpec('6', "MNO")
-    ),
-    listOf(
-        DialpadKeySpec('7', "PQRS"),
-        DialpadKeySpec('8', "TUV"),
-        DialpadKeySpec('9', "WXYZ")
-    ),
-    listOf(
-        DialpadKeySpec('*', ","),
-        DialpadKeySpec('0', "+", longPressChar = '+'),
-        DialpadKeySpec('#', ";")
-    )
-)
-
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
-fun SmartDialpadPanel(
-    enteredText: String,
-    hapticsEnabled: Boolean,
-    oneHandedMode: Boolean,
-    onDigitPress: (Char) -> Unit,
+fun SmartDialpad(
+    currentInput: String,
+    availableSims: List<SimSubscriptionItem>,
+    isSoundEnabled: Boolean,
+    isHapticEnabled: Boolean,
+    onDigitPressed: (Char) -> Unit,
     onBackspace: () -> Unit,
     onClearAll: () -> Unit,
-    onPasteText: (String) -> Unit,
-    onPlaceCall: () -> Unit,
-    onCollapse: () -> Unit,
+    onPlaceCall: (explicitSimId: String?) -> Unit,
     modifier: Modifier = Modifier
 ) {
-    val haptic = LocalHapticFeedback.current
-    val clipboardManager = LocalClipboardManager.current
-    val prefixHint = remember(enteredText) {
-        PhoneNormalizer.describeNumberPrefix(enteredText)
-    }
-    val canDial = remember(enteredText) {
-        PhoneNormalizer.isValidDialableNumber(enteredText)
+    val context = LocalContext.current
+
+    val toneGen = remember(isSoundEnabled) {
+        if (isSoundEnabled) {
+            try {
+                ToneGenerator(AudioManager.STREAM_DTMF, 80)
+            } catch (_: Exception) {
+                null
+            }
+        } else null
     }
 
-    Surface(
+    fun playToneAndHaptic(char: Char) {
+        if (isHapticEnabled) {
+            try {
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+                    val vm = context.getSystemService(Context.VIBRATOR_MANAGER_SERVICE) as? VibratorManager
+                    vm?.defaultVibrator?.vibrate(VibrationEffect.createPredefined(VibrationEffect.EFFECT_CLICK))
+                } else {
+                    @Suppress("DEPRECATION")
+                    val v = context.getSystemService(Context.VIBRATOR_SERVICE) as? Vibrator
+                    @Suppress("DEPRECATION")
+                    v?.vibrate(VibrationEffect.createOneShot(20, VibrationEffect.DEFAULT_AMPLITUDE))
+                }
+            } catch (_: Exception) {}
+        }
+
+        if (isSoundEnabled && toneGen != null) {
+            val tone = when (char) {
+                '0' -> ToneGenerator.TONE_DTMF_0
+                '1' -> ToneGenerator.TONE_DTMF_1
+                '2' -> ToneGenerator.TONE_DTMF_2
+                '3' -> ToneGenerator.TONE_DTMF_3
+                '4' -> ToneGenerator.TONE_DTMF_4
+                '5' -> ToneGenerator.TONE_DTMF_5
+                '6' -> ToneGenerator.TONE_DTMF_6
+                '7' -> ToneGenerator.TONE_DTMF_7
+                '8' -> ToneGenerator.TONE_DTMF_8
+                '9' -> ToneGenerator.TONE_DTMF_9
+                '*' -> ToneGenerator.TONE_DTMF_S
+                '#' -> ToneGenerator.TONE_DTMF_P
+                else -> ToneGenerator.TONE_PROP_BEEP
+            }
+            try {
+                toneGen.startTone(tone, 100)
+            } catch (_: Exception) {}
+        }
+    }
+
+    val rows = listOf(
+        listOf(
+            DialpadKeySpec('1', ""),
+            DialpadKeySpec('2', "ABC"),
+            DialpadKeySpec('3', "DEF")
+        ),
+        listOf(
+            DialpadKeySpec('4', "GHI"),
+            DialpadKeySpec('5', "JKL"),
+            DialpadKeySpec('6', "MNO")
+        ),
+        listOf(
+            DialpadKeySpec('7', "PQRS"),
+            DialpadKeySpec('8', "TUV"),
+            DialpadKeySpec('9', "WXYZ")
+        ),
+        listOf(
+            DialpadKeySpec('*', ""),
+            DialpadKeySpec('0', "+", longPressChar = '+'),
+            DialpadKeySpec('#', "")
+        )
+    )
+
+    Card(
         modifier = modifier
             .fillMaxWidth()
-            .testTag("smart_dialpad_panel"),
-        color = MaterialTheme.colorScheme.surface,
-        tonalElevation = 6.dp,
-        shadowElevation = 12.dp,
-        shape = RoundedCornerShape(topStart = 28.dp, topEnd = 28.dp)
+            .testTag("smart_dialpad_sheet"),
+        shape = RoundedCornerShape(topStart = 24.dp, topEnd = 24.dp),
+        colors = CardDefaults.cardColors(
+            containerColor = MaterialTheme.colorScheme.surface
+        ),
+        elevation = CardDefaults.cardElevation(defaultElevation = 8.dp)
     ) {
         Column(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(
-                    start = if (oneHandedMode) 36.dp else 16.dp,
-                    end = 16.dp,
-                    top = 12.dp,
-                    bottom = 14.dp
-                ),
-            horizontalAlignment = if (oneHandedMode) Alignment.End else Alignment.CenterHorizontally
+                .padding(horizontal = 24.dp, vertical = 16.dp),
+            horizontalAlignment = Alignment.CenterHorizontally
         ) {
-            // Display Header with Paste, Number Display, and Backspace
+            // Drag handle
+            Box(
+                modifier = Modifier
+                    .size(width = 36.dp, height = 4.dp)
+                    .clip(RoundedCornerShape(2.dp))
+                    .background(MaterialTheme.colorScheme.outlineVariant)
+            )
+
+            Spacer(modifier = Modifier.height(12.dp))
+
+            // Display area with formatted number and paste/backspace buttons
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .widthIn(max = if (oneHandedMode) 340.dp else 500.dp)
-                    .padding(horizontal = 4.dp),
+                    .height(56.dp)
+                    .padding(horizontal = 8.dp),
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.SpaceBetween
             ) {
-                IconButton(
-                    onClick = {
-                        val clip = clipboardManager.getText()?.text.orEmpty()
-                        val sanitized = PhoneNormalizer.sanitizeDialInput(clip)
-                        if (sanitized.isNotEmpty()) {
-                            onPasteText(sanitized)
-                        }
-                    },
-                    modifier = Modifier
-                        .size(48.dp)
-                        .testTag("dialpad_paste_button")
-                ) {
-                    Icon(
-                        imageVector = Icons.Outlined.ContentPaste,
-                        contentDescription = stringResource(R.string.dialpad_paste_desc),
-                        tint = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
-                }
-
-                Column(
-                    modifier = Modifier
-                        .weight(1f)
-                        .padding(horizontal = 8.dp),
-                    horizontalAlignment = Alignment.CenterHorizontally
-                ) {
-                    Text(
-                        text = enteredText.ifBlank { stringResource(R.string.dialpad_empty_hint) },
-                        modifier = Modifier.testTag("dialpad_entered_display"),
-                        style = if (enteredText.isBlank()) {
-                            MaterialTheme.typography.titleMedium
-                        } else {
-                            MaterialTheme.typography.headlineMedium.copy(fontFamily = JetBrainsMonoFontFamily)
+                // Paste button if empty
+                if (currentInput.isEmpty()) {
+                    IconButton(
+                        onClick = {
+                            val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as? ClipboardManager
+                            val clipText = clipboard?.primaryClip?.getItemAt(0)?.text?.toString()
+                            if (!clipText.isNullOrBlank()) {
+                                for (ch in clipText) {
+                                    if (ch.isDigit() || ch == '+' || ch == '*' || ch == '#') {
+                                        onDigitPressed(ch)
+                                    }
+                                }
+                            }
                         },
-                        color = if (enteredText.isBlank()) {
-                            MaterialTheme.colorScheme.onSurfaceVariant
-                        } else {
-                            MaterialTheme.colorScheme.onSurface
-                        },
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis,
-                        textAlign = TextAlign.Center
-                    )
-                    if (prefixHint != null) {
-                        Text(
-                            text = prefixHint,
-                            style = MaterialTheme.typography.labelSmall,
-                            color = MaterialTheme.colorScheme.primary
+                        modifier = Modifier.testTag("dialpad_paste_button")
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.ContentPaste,
+                            contentDescription = stringResource(R.string.dialpad_paste_desc),
+                            tint = MaterialTheme.colorScheme.primary
                         )
                     }
+                } else {
+                    Spacer(modifier = Modifier.size(48.dp))
                 }
 
-                val backspaceDesc = stringResource(R.string.dialpad_backspace_desc)
-                Box(
+                // Dialed Digits
+                Text(
+                    text = if (currentInput.isEmpty()) stringResource(R.string.dialpad_empty_hint)
+                    else PhoneNormalizer.formatForDisplay(currentInput),
+                    style = if (currentInput.length > 12) MaterialTheme.typography.titleLarge
+                    else MaterialTheme.typography.headlineMedium,
+                    fontFamily = FontFamily.Monospace,
+                    fontWeight = FontWeight.Bold,
+                    color = if (currentInput.isEmpty()) MaterialTheme.colorScheme.outline
+                    else MaterialTheme.colorScheme.onSurface,
+                    textAlign = TextAlign.Center,
+                    maxLines = 1,
                     modifier = Modifier
-                        .size(48.dp)
-                        .clip(CircleShape)
-                        .combinedClickable(
-                            enabled = enteredText.isNotEmpty(),
-                            role = Role.Button,
-                            onClick = {
-                                if (hapticsEnabled) {
-                                    haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                        .weight(1f)
+                        .testTag("dialpad_input_display")
+                )
+
+                // Backspace button (with combined clickable: tap = 1 char, long press = clear all)
+                if (currentInput.isNotEmpty()) {
+                    Box(
+                        modifier = Modifier
+                            .size(48.dp)
+                            .clip(CircleShape)
+                            .combinedClickable(
+                                onClick = {
+                                    playToneAndHaptic('0')
+                                    onBackspace()
+                                },
+                                onLongClick = {
+                                    playToneAndHaptic('0')
+                                    onClearAll()
                                 }
-                                onBackspace()
-                            },
-                            onLongClick = {
-                                if (hapticsEnabled) {
-                                    haptic.performHapticFeedback(HapticFeedbackType.LongPress)
-                                }
-                                onClearAll()
-                            }
+                            )
+                            .testTag("dialpad_backspace_button"),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Icon(
+                            imageVector = Icons.AutoMirrored.Filled.Backspace,
+                            contentDescription = stringResource(R.string.dialpad_backspace_desc),
+                            tint = MaterialTheme.colorScheme.onSurfaceVariant
                         )
-                        .semantics { contentDescription = backspaceDesc }
-                        .testTag("dialpad_backspace_button"),
-                    contentAlignment = Alignment.Center
-                ) {
-                    Icon(
-                        imageVector = Icons.AutoMirrored.Outlined.Backspace,
-                        contentDescription = null,
-                        tint = if (enteredText.isNotEmpty()) {
-                            MaterialTheme.colorScheme.onSurface
-                        } else {
-                            MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.35f)
-                        }
-                    )
+                    }
+                } else {
+                    Spacer(modifier = Modifier.size(48.dp))
                 }
             }
 
             Spacer(modifier = Modifier.height(8.dp))
 
-            // 4x3 Keypad Grid
-            Column(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .widthIn(max = if (oneHandedMode) 340.dp else 460.dp),
-                verticalArrangement = Arrangement.spacedBy(8.dp)
-            ) {
-                dialpadRows.forEach { row ->
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.spacedBy(10.dp)
-                    ) {
-                        row.forEach { keySpec ->
-                            DialpadKeyButton(
-                                keySpec = keySpec,
-                                hapticsEnabled = hapticsEnabled,
-                                onPress = onDigitPress,
-                                modifier = Modifier.weight(1f)
+            // Keypad Grid
+            for (row in rows) {
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(vertical = 4.dp),
+                    horizontalArrangement = Arrangement.SpaceEvenly
+                ) {
+                    for (spec in row) {
+                        Box(
+                            modifier = Modifier
+                                .size(68.dp)
+                                .clip(CircleShape)
+                                .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.6f))
+                                .combinedClickable(
+                                    onClick = {
+                                        playToneAndHaptic(spec.digit)
+                                        onDigitPressed(spec.digit)
+                                    },
+                                    onLongClick = {
+                                        val longChar = spec.longPressChar ?: spec.digit
+                                        playToneAndHaptic(longChar)
+                                        onDigitPressed(longChar)
+                                    }
+                                )
+                                .testTag("dialpad_key_${spec.digit}"),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                                Text(
+                                    text = spec.digit.toString(),
+                                    style = MaterialTheme.typography.titleLarge,
+                                    fontSize = 24.sp,
+                                    fontWeight = FontWeight.Bold,
+                                    color = MaterialTheme.colorScheme.onSurface
+                                )
+                                if (spec.subLabel.isNotEmpty()) {
+                                    Text(
+                                        text = spec.subLabel,
+                                        style = MaterialTheme.typography.labelSmall,
+                                        fontSize = 9.sp,
+                                        letterSpacing = 1.sp,
+                                        fontWeight = FontWeight.Medium,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                                    )
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+
+            Spacer(modifier = Modifier.height(14.dp))
+
+            // Bottom Call Trigger(s)
+            if (availableSims.size > 1) {
+                // Multi-SIM quick call buttons
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceEvenly
+                ) {
+                    for (sim in availableSims.take(2)) {
+                        Button(
+                            onClick = { onPlaceCall(sim.subscriptionId.toString()) },
+                            modifier = Modifier
+                                .weight(1f)
+                                .height(52.dp)
+                                .padding(horizontal = 4.dp)
+                                .testTag("call_button_sim_${sim.slotIndex}"),
+                            colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF2E7D32)),
+                            shape = RoundedCornerShape(26.dp)
+                        ) {
+                            Icon(Icons.Filled.Call, contentDescription = null, modifier = Modifier.size(20.dp))
+                            Spacer(modifier = Modifier.width(6.dp))
+                            Text(
+                                text = "SIM ${sim.slotIndex + 1}",
+                                style = MaterialTheme.typography.labelLarge,
+                                fontWeight = FontWeight.Bold
                             )
                         }
                     }
                 }
-            }
-
-            Spacer(modifier = Modifier.height(12.dp))
-
-            // Action Row: Hide Keypad & Direct Call Action
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .widthIn(max = if (oneHandedMode) 340.dp else 460.dp),
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.SpaceBetween
-            ) {
-                IconButton(
-                    onClick = onCollapse,
-                    modifier = Modifier
-                        .size(48.dp)
-                        .testTag("dialpad_hide_button")
-                ) {
-                    Icon(
-                        imageVector = Icons.Outlined.KeyboardArrowDown,
-                        contentDescription = stringResource(R.string.hide_dialpad),
-                        tint = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
-                }
-
-                val callDesc = stringResource(R.string.dialpad_call_desc)
+            } else {
+                // Single large call button
                 Button(
-                    onClick = {
-                        if (hapticsEnabled) {
-                            haptic.performHapticFeedback(HapticFeedbackType.LongPress)
-                        }
-                        onPlaceCall()
-                    },
-                    enabled = canDial,
+                    onClick = { onPlaceCall(null) },
                     modifier = Modifier
-                        .weight(1f)
-                        .padding(horizontal = 16.dp)
-                        .height(56.dp)
-                        .semantics { contentDescription = callDesc }
+                        .size(width = 160.dp, height = 56.dp)
                         .testTag("dialpad_call_button"),
-                    shape = RoundedCornerShape(28.dp),
-                    colors = ButtonDefaults.buttonColors(
-                        containerColor = MaterialTheme.colorScheme.primaryContainer,
-                        contentColor = MaterialTheme.colorScheme.onPrimaryContainer
-                    )
+                    colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF2E7D32)),
+                    shape = RoundedCornerShape(28.dp)
                 ) {
                     Icon(
                         imageVector = Icons.Filled.Call,
-                        contentDescription = null,
-                        modifier = Modifier.size(22.dp)
+                        contentDescription = stringResource(R.string.dialpad_call_desc),
+                        modifier = Modifier.size(26.dp)
                     )
-                    Spacer(modifier = Modifier.width(10.dp))
+                    Spacer(modifier = Modifier.width(8.dp))
                     Text(
-                        text = stringResource(R.string.dialpad_call_desc),
+                        text = "Call",
                         style = MaterialTheme.typography.titleMedium,
                         fontWeight = FontWeight.Bold
                     )
                 }
-
-                Spacer(modifier = Modifier.size(48.dp))
             }
-        }
-    }
-}
-
-@OptIn(ExperimentalFoundationApi::class)
-@Composable
-private fun DialpadKeyButton(
-    keySpec: DialpadKeySpec,
-    hapticsEnabled: Boolean,
-    onPress: (Char) -> Unit,
-    modifier: Modifier = Modifier
-) {
-    val haptic = LocalHapticFeedback.current
-    val talkBackDesc = if (keySpec.longPressChar != null) {
-        "Digit ${keySpec.digit}, ${keySpec.subLabel}, long press for plus"
-    } else {
-        "Digit ${keySpec.digit}, ${keySpec.subLabel}"
-    }
-
-    Box(
-        modifier = modifier
-            .height(58.dp)
-            .clip(RoundedCornerShape(18.dp))
-            .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.65f))
-            .combinedClickable(
-                role = Role.Button,
-                onClick = {
-                    if (hapticsEnabled) {
-                        haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
-                    }
-                    onPress(keySpec.digit)
-                },
-                onLongClick = {
-                    if (keySpec.longPressChar != null) {
-                        if (hapticsEnabled) {
-                            haptic.performHapticFeedback(HapticFeedbackType.LongPress)
-                        }
-                        onPress(keySpec.longPressChar)
-                    }
-                }
-            )
-            .semantics { contentDescription = talkBackDesc }
-            .testTag("dialpad_key_${keySpec.digit}"),
-        contentAlignment = Alignment.Center
-    ) {
-        Column(horizontalAlignment = Alignment.CenterHorizontally) {
-            Text(
-                text = keySpec.digit.toString(),
-                style = MaterialTheme.typography.headlineSmall,
-                fontWeight = FontWeight.Bold,
-                color = MaterialTheme.colorScheme.onSurface
-            )
-            Text(
-                text = keySpec.subLabel,
-                style = MaterialTheme.typography.labelSmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant
-            )
         }
     }
 }

@@ -1,36 +1,18 @@
 package com.example.telecom
 
-import android.Manifest
 import android.app.role.RoleManager
 import android.content.Context
 import android.content.Intent
-import android.content.pm.PackageManager
 import android.net.Uri
 import android.os.Build
 import android.os.Bundle
 import android.telecom.PhoneAccountHandle
 import android.telecom.TelecomManager
+import android.telephony.SubscriptionManager
 import androidx.core.content.ContextCompat
 import com.example.domain.PhoneNormalizer
 import com.example.domain.SimSubscriptionItem
 
-sealed class CallInitiationOutcome {
-    data object PlacedDirectly : CallInitiationOutcome()
-    data object OpenedSystemDialerFallback : CallInitiationOutcome()
-    data class RequiresSimSelection(
-        val sanitizedNumber: String,
-        val availableSims: List<SimSubscriptionItem>
-    ) : CallInitiationOutcome()
-    data class Error(val reason: String) : CallInitiationOutcome()
-}
-
-/**
- * Encapsulates real Android TelecomManager and RoleManager interactions:
- * - Default Dialer role checking & request intents (`RoleManager.ROLE_DIALER`)
- * - Call Screening role checking & request intents (`RoleManager.ROLE_CALL_SCREENING`)
- * - Multi-SIM (`PhoneAccountHandle`) discovery
- * - Placing calls via `TelecomManager.placeCall` or safe `ACTION_DIAL` fallback
- */
 class TelecomDialerManager(private val context: Context) {
 
     private val telecomManager: TelecomManager? =
@@ -41,14 +23,11 @@ class TelecomDialerManager(private val context: Context) {
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
                 val roleManager = context.getSystemService(Context.ROLE_SERVICE) as? RoleManager
                 if (roleManager != null && roleManager.isRoleAvailable(RoleManager.ROLE_DIALER)) {
-                    roleManager.isRoleHeld(RoleManager.ROLE_DIALER)
-                } else {
-                    telecomManager?.defaultDialerPackage == context.packageName
+                    return roleManager.isRoleHeld(RoleManager.ROLE_DIALER)
                 }
-            } else {
-                telecomManager?.defaultDialerPackage == context.packageName
             }
-        } catch (e: Exception) {
+            telecomManager?.defaultDialerPackage == context.packageName
+        } catch (_: Exception) {
             false
         }
     }
@@ -57,13 +36,12 @@ class TelecomDialerManager(private val context: Context) {
         return try {
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
                 val roleManager = context.getSystemService(Context.ROLE_SERVICE) as? RoleManager
-                roleManager != null &&
-                    roleManager.isRoleAvailable(RoleManager.ROLE_CALL_SCREENING) &&
-                    roleManager.isRoleHeld(RoleManager.ROLE_CALL_SCREENING)
-            } else {
-                false
+                if (roleManager != null && roleManager.isRoleAvailable(RoleManager.ROLE_CALL_SCREENING)) {
+                    return roleManager.isRoleHeld(RoleManager.ROLE_CALL_SCREENING)
+                }
             }
-        } catch (e: Exception) {
+            false
+        } catch (_: Exception) {
             false
         }
     }
@@ -73,24 +51,14 @@ class TelecomDialerManager(private val context: Context) {
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
                 val roleManager = context.getSystemService(Context.ROLE_SERVICE) as? RoleManager
                 if (roleManager != null && roleManager.isRoleAvailable(RoleManager.ROLE_DIALER)) {
-                    roleManager.createRequestRoleIntent(RoleManager.ROLE_DIALER)
-                } else {
-                    Intent(TelecomManager.ACTION_CHANGE_DEFAULT_DIALER).apply {
-                        putExtra(
-                            TelecomManager.EXTRA_CHANGE_DEFAULT_DIALER_PACKAGE_NAME,
-                            context.packageName
-                        )
-                    }
-                }
-            } else {
-                Intent(TelecomManager.ACTION_CHANGE_DEFAULT_DIALER).apply {
-                    putExtra(
-                        TelecomManager.EXTRA_CHANGE_DEFAULT_DIALER_PACKAGE_NAME,
-                        context.packageName
-                    )
+                    return roleManager.createRequestRoleIntent(RoleManager.ROLE_DIALER)
                 }
             }
-        } catch (e: Exception) {
+            @Suppress("DEPRECATION")
+            Intent(TelecomManager.ACTION_CHANGE_DEFAULT_DIALER).apply {
+                putExtra(TelecomManager.EXTRA_CHANGE_DEFAULT_DIALER_PACKAGE_NAME, context.packageName)
+            }
+        } catch (_: Exception) {
             null
         }
     }
@@ -100,14 +68,11 @@ class TelecomDialerManager(private val context: Context) {
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
                 val roleManager = context.getSystemService(Context.ROLE_SERVICE) as? RoleManager
                 if (roleManager != null && roleManager.isRoleAvailable(RoleManager.ROLE_CALL_SCREENING)) {
-                    roleManager.createRequestRoleIntent(RoleManager.ROLE_CALL_SCREENING)
-                } else {
-                    null
+                    return roleManager.createRequestRoleIntent(RoleManager.ROLE_CALL_SCREENING)
                 }
-            } else {
-                null
             }
-        } catch (e: Exception) {
+            null
+        } catch (_: Exception) {
             null
         }
     }
@@ -115,49 +80,43 @@ class TelecomDialerManager(private val context: Context) {
     fun hasCallPhonePermission(): Boolean {
         return ContextCompat.checkSelfPermission(
             context,
-            Manifest.permission.CALL_PHONE
-        ) == PackageManager.PERMISSION_GRANTED
+            android.Manifest.permission.CALL_PHONE
+        ) == android.content.pm.PackageManager.PERMISSION_GRANTED
     }
 
     fun hasReadPhoneStatePermission(): Boolean {
         return ContextCompat.checkSelfPermission(
             context,
-            Manifest.permission.READ_PHONE_STATE
-        ) == PackageManager.PERMISSION_GRANTED
+            android.Manifest.permission.READ_PHONE_STATE
+        ) == android.content.pm.PackageManager.PERMISSION_GRANTED
     }
 
-    /**
-     * Queries available SIM / PhoneAccount subscriptions when READ_PHONE_STATE is granted.
-     */
     fun getAvailableSimAccounts(): List<SimSubscriptionItem> {
-        if (!hasReadPhoneStatePermission()) return emptyList()
-        val tm = telecomManager ?: return emptyList()
-        return try {
-            val handles: List<PhoneAccountHandle> = tm.callCapablePhoneAccounts
-            handles.mapIndexed { idx, handle ->
-                val account = tm.getPhoneAccount(handle)
-                val label = account?.label?.toString()?.takeIf { it.isNotBlank() } ?: "SIM ${idx + 1}"
-                val desc = account?.shortDescription?.toString()?.takeIf { it.isNotBlank() } ?: label
-                SimSubscriptionItem(
-                    id = handle.id ?: "sim_$idx",
-                    label = label,
-                    carrierName = desc,
-                    slotIndex = idx + 1
-                )
+        val result = mutableListOf<SimSubscriptionItem>()
+        try {
+            if (hasReadPhoneStatePermission()) {
+                val subManager = context.getSystemService(Context.TELEPHONY_SUBSCRIPTION_SERVICE) as? SubscriptionManager
+                val subList = subManager?.activeSubscriptionInfoList
+                if (!subList.isNullOrEmpty()) {
+                    for (info in subList) {
+                        result.add(
+                            SimSubscriptionItem(
+                                subscriptionId = info.subscriptionId,
+                                displayName = info.displayName?.toString() ?: "SIM ${info.simSlotIndex + 1}",
+                                carrierName = info.carrierName?.toString() ?: "Carrier",
+                                slotIndex = info.simSlotIndex,
+                                iccId = info.iccId ?: "",
+                                color = info.iconTint
+                            )
+                        )
+                    }
+                }
             }
-        } catch (se: SecurityException) {
-            emptyList()
-        } catch (e: Exception) {
-            emptyList()
-        }
+        } catch (_: Exception) {}
+        return result
     }
 
-    /**
-     * Initiates a real phone call using Android's TelecomManager or safe ACTION_DIAL fallback.
-     * If multiple SIMs exist and no preferred or explicit SIM ID was selected, returns
-     * [CallInitiationOutcome.RequiresSimSelection] so the user is never surprised by which SIM dials.
-     */
-    fun initiateCall(
+    fun initiateCellularCall(
         rawInput: String,
         preferredSimId: String = "",
         explicitSimId: String? = null
@@ -169,45 +128,33 @@ class TelecomDialerManager(private val context: Context) {
 
         val sims = getAvailableSimAccounts()
         val chosenSimId = explicitSimId ?: preferredSimId
+
         if (sims.size > 1 && chosenSimId.isBlank()) {
-            return CallInitiationOutcome.RequiresSimSelection(
-                sanitizedNumber = sanitized,
-                availableSims = sims
-            )
+            return CallInitiationOutcome.RequiresSimSelection(sanitized, sims)
         }
 
+        if (!hasCallPhonePermission()) {
+            return CallInitiationOutcome.Error("CALL_PHONE permission is required for cellular calls.")
+        }
+
+        val tm = telecomManager ?: return CallInitiationOutcome.Error("Telephony service unavailable on this device.")
         val telUri = Uri.fromParts("tel", sanitized, null)
 
-        // If CALL_PHONE is granted, place call directly via TelecomManager
-        if (hasCallPhonePermission() && telecomManager != null) {
-            try {
-                val extras = Bundle()
-                if (chosenSimId.isNotBlank() && hasReadPhoneStatePermission()) {
-                    val matchedHandle = telecomManager.callCapablePhoneAccounts.firstOrNull {
-                        it.id == chosenSimId
-                    }
-                    if (matchedHandle != null) {
-                        extras.putParcelable(TelecomManager.EXTRA_PHONE_ACCOUNT_HANDLE, matchedHandle)
-                    }
-                }
-                telecomManager.placeCall(telUri, extras)
-                return CallInitiationOutcome.PlacedDirectly
-            } catch (se: SecurityException) {
-                // Fall through to ACTION_DIAL fallback
-            } catch (e: Exception) {
-                // Fall through to ACTION_DIAL fallback
-            }
-        }
-
-        // Safe fallback when VOZ lacks CALL_PHONE permission or device restricts direct placement
         return try {
-            val dialIntent = Intent(Intent.ACTION_DIAL, telUri).apply {
-                addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+            val extras = Bundle()
+            if (chosenSimId.isNotBlank() && hasReadPhoneStatePermission()) {
+                val phoneAccounts = tm.callCapablePhoneAccounts
+                val matchedHandle: PhoneAccountHandle? = phoneAccounts.firstOrNull { it.id == chosenSimId }
+                if (matchedHandle != null) {
+                    extras.putParcelable(TelecomManager.EXTRA_PHONE_ACCOUNT_HANDLE, matchedHandle)
+                }
             }
-            context.startActivity(dialIntent)
-            CallInitiationOutcome.OpenedSystemDialerFallback
+            tm.placeCall(telUri, extras)
+            CallInitiationOutcome.PlacedDirectly
+        } catch (e: SecurityException) {
+            CallInitiationOutcome.Error("Cellular calling permission denied by system.")
         } catch (e: Exception) {
-            CallInitiationOutcome.Error("No telephone handler available on this device.")
+            CallInitiationOutcome.Error("Could not place cellular call: ${e.message ?: "hardware error"}")
         }
     }
 }

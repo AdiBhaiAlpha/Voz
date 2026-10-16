@@ -1,146 +1,114 @@
 package com.example.data.repository
 
-import android.Manifest
 import android.content.Context
-import android.content.pm.PackageManager
 import android.provider.ContactsContract
-import androidx.core.content.ContextCompat
 import com.example.domain.ContactItem
 import com.example.domain.ContactNumber
 import com.example.domain.PhoneNormalizer
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 
-sealed class ContactsLoadResult {
-    data class Success(val contacts: List<ContactItem>) : ContactsLoadResult()
-    data object PermissionDenied : ContactsLoadResult()
-    data class Error(val message: String) : ContactsLoadResult()
+sealed interface ContactsLoadResult {
+    data class Success(val contacts: List<ContactItem>) : ContactsLoadResult
+    data class PermissionDenied(val reason: String) : ContactsLoadResult
+    data class Error(val message: String) : ContactsLoadResult
 }
 
-/**
- * Reads authorized local contacts from Android's Contacts Provider on Dispatchers.IO.
- * Deduplicates multiple phone numbers per contact using PhoneNormalizer while preserving
- * the exact original phone string for display and dialing.
- * Never fabricates or modifies system contacts.
- */
 class ContactsRepository(private val context: Context) {
 
-    fun hasContactsPermission(): Boolean {
-        return ContextCompat.checkSelfPermission(
-            context,
-            Manifest.permission.READ_CONTACTS
-        ) == PackageManager.PERMISSION_GRANTED
-    }
-
     suspend fun loadAuthorizedContacts(): ContactsLoadResult = withContext(Dispatchers.IO) {
-        if (!hasContactsPermission()) {
-            return@withContext ContactsLoadResult.PermissionDenied
+        val hasPermission = androidx.core.content.ContextCompat.checkSelfPermission(
+            context,
+            android.Manifest.permission.READ_CONTACTS
+        ) == android.content.pm.PackageManager.PERMISSION_GRANTED
+
+        if (!hasPermission) {
+            return@withContext ContactsLoadResult.PermissionDenied(
+                "READ_CONTACTS permission is required to search and view your device contacts."
+            )
         }
 
         try {
+            val contactsMap = mutableMapOf<Long, ContactBuilder>()
+            val uri = ContactsContract.CommonDataKinds.Phone.CONTENT_URI
             val projection = arrayOf(
                 ContactsContract.CommonDataKinds.Phone.CONTACT_ID,
                 ContactsContract.CommonDataKinds.Phone.LOOKUP_KEY,
-                ContactsContract.CommonDataKinds.Phone.DISPLAY_NAME_PRIMARY,
+                ContactsContract.CommonDataKinds.Phone.DISPLAY_NAME,
                 ContactsContract.CommonDataKinds.Phone.NUMBER,
+                ContactsContract.CommonDataKinds.Phone.PHOTO_URI,
                 ContactsContract.CommonDataKinds.Phone.TYPE,
-                ContactsContract.CommonDataKinds.Phone.LABEL,
-                ContactsContract.CommonDataKinds.Phone.PHOTO_THUMBNAIL_URI
+                ContactsContract.CommonDataKinds.Phone.LABEL
             )
+            val sortOrder = "${ContactsContract.CommonDataKinds.Phone.DISPLAY_NAME} COLLATE NOCASE ASC"
 
-            val sortOrder = "${ContactsContract.CommonDataKinds.Phone.DISPLAY_NAME_PRIMARY} COLLATE LOCALIZED ASC"
-
-            val groupedMap = LinkedHashMap<Long, MutableContactBuilder>()
-
-            context.contentResolver.query(
-                ContactsContract.CommonDataKinds.Phone.CONTENT_URI,
-                projection,
-                null,
-                null,
-                sortOrder
-            )?.use { cursor ->
-                val idIdx = cursor.getColumnIndexOrThrow(ContactsContract.CommonDataKinds.Phone.CONTACT_ID)
-                val lookupIdx = cursor.getColumnIndexOrThrow(ContactsContract.CommonDataKinds.Phone.LOOKUP_KEY)
-                val nameIdx = cursor.getColumnIndexOrThrow(ContactsContract.CommonDataKinds.Phone.DISPLAY_NAME_PRIMARY)
-                val numberIdx = cursor.getColumnIndexOrThrow(ContactsContract.CommonDataKinds.Phone.NUMBER)
-                val typeIdx = cursor.getColumnIndexOrThrow(ContactsContract.CommonDataKinds.Phone.TYPE)
-                val labelIdx = cursor.getColumnIndexOrThrow(ContactsContract.CommonDataKinds.Phone.LABEL)
-                val photoIdx = cursor.getColumnIndexOrThrow(ContactsContract.CommonDataKinds.Phone.PHOTO_THUMBNAIL_URI)
+            context.contentResolver.query(uri, projection, null, null, sortOrder)?.use { cursor ->
+                val idIdx = cursor.getColumnIndex(ContactsContract.CommonDataKinds.Phone.CONTACT_ID)
+                val lookupIdx = cursor.getColumnIndex(ContactsContract.CommonDataKinds.Phone.LOOKUP_KEY)
+                val nameIdx = cursor.getColumnIndex(ContactsContract.CommonDataKinds.Phone.DISPLAY_NAME)
+                val numberIdx = cursor.getColumnIndex(ContactsContract.CommonDataKinds.Phone.NUMBER)
+                val photoIdx = cursor.getColumnIndex(ContactsContract.CommonDataKinds.Phone.PHOTO_URI)
+                val typeIdx = cursor.getColumnIndex(ContactsContract.CommonDataKinds.Phone.TYPE)
+                val labelIdx = cursor.getColumnIndex(ContactsContract.CommonDataKinds.Phone.LABEL)
 
                 while (cursor.moveToNext()) {
-                    val contactId = cursor.getLong(idIdx)
-                    val lookupKey = cursor.getString(lookupIdx).orEmpty()
-                    val displayName = cursor.getString(nameIdx)?.trim().orEmpty()
-                    val rawNumber = cursor.getString(numberIdx)?.trim().orEmpty()
-                    if (rawNumber.isEmpty()) continue
+                    val contactId = if (idIdx >= 0) cursor.getLong(idIdx) else 0L
+                    val lookupKey = if (lookupIdx >= 0) cursor.getString(lookupIdx) ?: "" else ""
+                    val name = if (nameIdx >= 0) cursor.getString(nameIdx) ?: "Unknown" else "Unknown"
+                    val number = if (numberIdx >= 0) cursor.getString(numberIdx) ?: "" else ""
+                    val photoUri = if (photoIdx >= 0) cursor.getString(photoIdx) else null
+                    val type = if (typeIdx >= 0) cursor.getInt(typeIdx) else 2
+                    val label = if (labelIdx >= 0) cursor.getString(labelIdx) ?: "Mobile" else "Mobile"
 
-                    val phoneType = cursor.getInt(typeIdx)
-                    val customTypeLabel = cursor.getString(labelIdx)
-                    val typeLabel = ContactsContract.CommonDataKinds.Phone.getTypeLabel(
-                        context.resources,
-                        phoneType,
-                        customTypeLabel
-                    )?.toString() ?: "Mobile"
-                    val photoUri = cursor.getString(photoIdx)
-
-                    val normalized = PhoneNormalizer.normalizeForComparison(rawNumber)
-                        .ifBlank { rawNumber }
-
-                    val builder = groupedMap.getOrPut(contactId) {
-                        MutableContactBuilder(
-                            contactId = contactId,
-                            lookupKey = lookupKey,
-                            displayName = displayName.ifEmpty { rawNumber },
-                            photoUri = photoUri
+                    if (number.isNotBlank()) {
+                        val normalized = PhoneNormalizer.normalizeForComparison(number)
+                        val contactNumber = ContactNumber(
+                            rawNumber = number,
+                            normalizedNumber = normalized,
+                            label = label,
+                            type = type
                         )
-                    }
 
-                    if (builder.photoUri == null && photoUri != null) {
-                        builder.photoUri = photoUri
-                    }
-
-                    // Avoid duplicate normalized numbers under the same contact
-                    val alreadyHasNumber = builder.numbers.any { existing ->
-                        existing.normalizedNumber == normalized ||
-                            PhoneNormalizer.areNumbersEquivalent(existing.rawNumber, rawNumber)
-                    }
-                    if (!alreadyHasNumber) {
-                        builder.numbers.add(
-                            ContactNumber(
-                                rawNumber = rawNumber,
-                                normalizedNumber = normalized,
-                                typeLabel = typeLabel
+                        val builder = contactsMap.getOrPut(contactId) {
+                            ContactBuilder(
+                                contactId = contactId,
+                                lookupKey = lookupKey,
+                                displayName = name,
+                                photoUri = photoUri
                             )
-                        )
+                        }
+                        builder.numbers.add(contactNumber)
                     }
                 }
             }
 
-            val contacts = groupedMap.values
-                .filter { it.numbers.isNotEmpty() }
-                .map { it.build() }
-
-            ContactsLoadResult.Success(contacts)
-        } catch (se: SecurityException) {
-            ContactsLoadResult.PermissionDenied
+            val list = contactsMap.values.map { it.build() }
+            ContactsLoadResult.Success(list)
         } catch (e: Exception) {
-            ContactsLoadResult.Error("Unable to read device contacts.")
+            ContactsLoadResult.Error(e.message ?: "Failed to read contacts")
         }
     }
 
-    private class MutableContactBuilder(
+    private class ContactBuilder(
         val contactId: Long,
         val lookupKey: String,
         val displayName: String,
-        var photoUri: String?,
-        val numbers: MutableList<ContactNumber> = mutableListOf()
+        val photoUri: String?
     ) {
-        fun build(): ContactItem = ContactItem(
-            contactId = contactId,
-            lookupKey = lookupKey,
-            displayName = displayName,
-            photoUri = photoUri,
-            numbers = numbers.toList()
-        )
+        val numbers = mutableListOf<ContactNumber>()
+
+        fun build(): ContactItem {
+            val primary = numbers.firstOrNull()?.rawNumber ?: ""
+            val primaryNorm = numbers.firstOrNull()?.normalizedNumber ?: ""
+            return ContactItem(
+                contactId = contactId,
+                lookupKey = lookupKey,
+                displayName = displayName,
+                primaryNumber = primary,
+                primaryNormalizedNumber = primaryNorm,
+                numbers = numbers,
+                photoUri = photoUri
+            )
+        }
     }
 }

@@ -9,137 +9,123 @@ import kotlinx.coroutines.flow.Flow
 
 class VozAssistRepository(private val dao: VozAssistDao) {
 
-    val assistMetadataFlow: Flow<List<ContactAssistEntity>> = dao.observeAllAssistMetadata()
-    val blockedNumbersFlow: Flow<List<BlockedNumberEntity>> = dao.observeBlockedNumbers()
-    val activeRemindersFlow: Flow<List<CallReminderEntity>> = dao.observeActiveReminders()
+    val allAssist: Flow<List<ContactAssistEntity>> = dao.getAllAssist()
+    val allBlocked: Flow<List<BlockedNumberEntity>> = dao.getAllBlocked()
+    val pendingReminders: Flow<List<CallReminderEntity>> = dao.getPendingReminders()
 
-    suspend fun saveContactAssist(
-        rawNumber: String,
-        displayNameHint: String,
+    suspend fun getAssist(phoneOrKey: String): ContactAssistEntity? {
+        val norm = PhoneNormalizer.normalizeForComparison(phoneOrKey)
+        val key = norm.ifBlank { phoneOrKey }
+        return dao.getAssistByKey(key)
+    }
+
+    suspend fun saveAssist(
+        phoneOrKey: String,
         note: String,
         customLabel: String,
         isFavorite: Boolean,
         isImportant: Boolean
     ) {
-        val normalized = PhoneNormalizer.normalizeForComparison(rawNumber).ifBlank { rawNumber.trim() }
-        if (normalized.isEmpty()) return
-
-        if (note.isBlank() && customLabel.isBlank() && !isFavorite && !isImportant) {
-            dao.deleteAssistMetadata(normalized)
-        } else {
-            dao.upsertAssistMetadata(
-                ContactAssistEntity(
-                    normalizedNumber = normalized,
-                    rawNumber = rawNumber.trim(),
-                    displayNameHint = displayNameHint.trim(),
-                    note = note.trim(),
-                    customLabel = customLabel.trim(),
-                    isFavorite = isFavorite,
-                    isImportant = isImportant,
-                    updatedAtMillis = System.currentTimeMillis()
-                )
-            )
-        }
-    }
-
-    suspend fun toggleFavorite(rawNumber: String, displayNameHint: String) {
-        val normalized = PhoneNormalizer.normalizeForComparison(rawNumber).ifBlank { rawNumber.trim() }
-        if (normalized.isEmpty()) return
-        val existing = dao.getAssistForNumber(normalized)
-        val updated = if (existing != null) {
-            existing.copy(
-                isFavorite = !existing.isFavorite,
-                updatedAtMillis = System.currentTimeMillis()
-            )
-        } else {
+        val norm = PhoneNormalizer.normalizeForComparison(phoneOrKey)
+        val key = norm.ifBlank { phoneOrKey }
+        dao.upsertAssist(
             ContactAssistEntity(
-                normalizedNumber = normalized,
-                rawNumber = rawNumber.trim(),
-                displayNameHint = displayNameHint.trim(),
-                isFavorite = true
-            )
-        }
-        dao.upsertAssistMetadata(updated)
-    }
-
-    suspend fun toggleImportant(rawNumber: String, displayNameHint: String) {
-        val normalized = PhoneNormalizer.normalizeForComparison(rawNumber).ifBlank { rawNumber.trim() }
-        if (normalized.isEmpty()) return
-        val existing = dao.getAssistForNumber(normalized)
-        val updated = if (existing != null) {
-            existing.copy(
-                isImportant = !existing.isImportant,
-                updatedAtMillis = System.currentTimeMillis()
-            )
-        } else {
-            ContactAssistEntity(
-                normalizedNumber = normalized,
-                rawNumber = rawNumber.trim(),
-                displayNameHint = displayNameHint.trim(),
-                isImportant = true
-            )
-        }
-        dao.upsertAssistMetadata(updated)
-    }
-
-    suspend fun deleteContactAssist(rawOrNormalizedNumber: String) {
-        val normalized = PhoneNormalizer.normalizeForComparison(rawOrNormalizedNumber)
-            .ifBlank { rawOrNormalizedNumber.trim() }
-        dao.deleteAssistMetadata(normalized)
-    }
-
-    suspend fun blockNumber(rawNumber: String, reason: String = ""): Boolean {
-        val normalized = PhoneNormalizer.normalizeForComparison(rawNumber)
-        if (normalized.isEmpty()) return false
-        dao.insertBlockedNumber(
-            BlockedNumberEntity(
-                normalizedNumber = normalized,
-                originalNumber = rawNumber.trim(),
-                reason = reason.trim(),
-                createdAtMillis = System.currentTimeMillis()
+                phoneKey = key,
+                note = note.trim(),
+                customLabel = customLabel.trim(),
+                isFavorite = isFavorite,
+                isImportant = isImportant,
+                lastModifiedMillis = System.currentTimeMillis()
             )
         )
-        return true
     }
 
-    suspend fun unblockNumber(rawOrNormalizedNumber: String) {
-        val normalized = PhoneNormalizer.normalizeForComparison(rawOrNormalizedNumber)
-            .ifBlank { rawOrNormalizedNumber.trim() }
-        dao.unblockNumber(normalized)
+    suspend fun deleteAssist(phoneOrKey: String) {
+        val norm = PhoneNormalizer.normalizeForComparison(phoneOrKey)
+        val key = norm.ifBlank { phoneOrKey }
+        dao.deleteAssist(key)
+    }
+
+    suspend fun toggleFavorite(phoneOrKey: String): Boolean {
+        val current = getAssist(phoneOrKey)
+        val newFav = !(current?.isFavorite ?: false)
+        val norm = PhoneNormalizer.normalizeForComparison(phoneOrKey)
+        val key = norm.ifBlank { phoneOrKey }
+        dao.upsertAssist(
+            ContactAssistEntity(
+                phoneKey = key,
+                note = current?.note ?: "",
+                customLabel = current?.customLabel ?: "",
+                isFavorite = newFav,
+                isImportant = current?.isImportant ?: false,
+                lastModifiedMillis = System.currentTimeMillis()
+            )
+        )
+        return newFav
+    }
+
+    suspend fun toggleImportant(phoneOrKey: String): Boolean {
+        val current = getAssist(phoneOrKey)
+        val newImp = !(current?.isImportant ?: false)
+        val norm = PhoneNormalizer.normalizeForComparison(phoneOrKey)
+        val key = norm.ifBlank { phoneOrKey }
+        dao.upsertAssist(
+            ContactAssistEntity(
+                phoneKey = key,
+                note = current?.note ?: "",
+                customLabel = current?.customLabel ?: "",
+                isFavorite = current?.isFavorite ?: false,
+                isImportant = newImp,
+                lastModifiedMillis = System.currentTimeMillis()
+            )
+        )
+        return newImp
     }
 
     suspend fun isBlocked(rawNumber: String): Boolean {
-        val normalized = PhoneNormalizer.normalizeForComparison(rawNumber)
-        if (normalized.isEmpty()) return false
-        if (dao.isNumberBlocked(normalized)) return true
-        val allBlocked = dao.getAllBlockedNumbersSnapshot()
-        return allBlocked.any { PhoneNormalizer.areNumbersEquivalent(it.normalizedNumber, normalized) }
+        val norm = PhoneNormalizer.normalizeForComparison(rawNumber)
+        if (norm.isEmpty()) return false
+        return dao.isBlocked(norm)
     }
 
-    suspend fun addCallReminder(
-        rawNumber: String,
-        contactName: String,
-        reason: String,
-        dueInMinutes: Int
-    ): Long {
-        val normalized = PhoneNormalizer.normalizeForComparison(rawNumber).ifBlank { rawNumber.trim() }
-        val dueAt = System.currentTimeMillis() + (dueInMinutes.coerceAtLeast(1) * 60_000L)
-        return dao.insertReminder(
-            CallReminderEntity(
-                normalizedNumber = normalized,
-                rawNumber = rawNumber.trim(),
-                contactName = contactName.trim().ifBlank { rawNumber.trim() },
-                reason = reason.trim(),
-                dueAtMillis = dueAt
+    suspend fun blockNumber(rawNumber: String, reason: String = "") {
+        val norm = PhoneNormalizer.normalizeForComparison(rawNumber)
+        val key = norm.ifBlank { rawNumber }
+        dao.blockNumber(
+            BlockedNumberEntity(
+                normalizedNumber = key,
+                rawNumber = rawNumber,
+                labelOrReason = reason,
+                blockedTimestampMillis = System.currentTimeMillis()
             )
         )
     }
 
-    suspend fun completeReminder(reminderId: Long) {
-        dao.markReminderCompleted(reminderId)
+    suspend fun unblockNumber(normalizedNumber: String) {
+        dao.unblockNumber(normalizedNumber)
     }
 
-    suspend fun deleteReminder(reminderId: Long) {
-        dao.deleteReminder(reminderId)
+    suspend fun addReminder(
+        contactName: String,
+        rawNumber: String,
+        scheduledMillis: Long,
+        reason: String
+    ) {
+        dao.insertReminder(
+            CallReminderEntity(
+                contactName = contactName,
+                rawNumber = rawNumber,
+                scheduledMillis = scheduledMillis,
+                reason = reason
+            )
+        )
+    }
+
+    suspend fun completeReminder(id: Long) {
+        dao.markReminderCompleted(id)
+    }
+
+    suspend fun deleteReminder(id: Long) {
+        dao.deleteReminder(id)
     }
 }

@@ -11,11 +11,9 @@ import android.telecom.CallAudioState
 import android.telecom.InCallService
 import androidx.core.app.NotificationCompat
 import androidx.core.app.Person
+import androidx.room.Room
 import com.example.R
 import com.example.data.local.VozDatabase
-import com.example.data.repository.ContactsLoadResult
-import com.example.data.repository.ContactsRepository
-import com.example.data.repository.VozAssistRepository
 import com.example.domain.PhoneNormalizer
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -24,103 +22,89 @@ import kotlinx.coroutines.cancel
 import kotlinx.coroutines.launch
 import java.util.UUID
 
-/**
- * Real Android Telecom InCallService implementation.
- * Bound by the Android OS when VOZ holds RoleManager.ROLE_DIALER and a call is placed or received.
- */
+@Suppress("DEPRECATION")
 class VozInCallService : InCallService() {
 
     private val serviceScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
+    private var database: VozDatabase? = null
+
+    companion object {
+        private const val CHANNEL_ID = "voz_calls_channel"
+        private const val NOTIFICATION_ID = 4001
+    }
 
     override fun onCreate() {
         super.onCreate()
+        CallManager.attachInCallService(this)
         CallSessionController.attachService(this)
         ensureNotificationChannel()
+        database = Room.databaseBuilder(
+            applicationContext,
+            VozDatabase::class.java,
+            "voz_app_database"
+        ).build()
     }
 
     override fun onCallAdded(call: Call) {
         super.onCallAdded(call)
         val callId = UUID.randomUUID().toString()
-        val rawNumber = call.details?.handle?.schemeSpecificPart.orEmpty()
+        val details = call.details
+        val rawNumber = details?.handle?.schemeSpecificPart ?: ""
         val normalized = PhoneNormalizer.normalizeForComparison(rawNumber).ifBlank { rawNumber }
         val state = CallSessionController.mapSystemState(call)
-        val callerDisplay = call.details?.callerDisplayName?.takeIf { it.isNotBlank() }
+        val callerDisplay = details?.callerDisplayName?.takeIf { it.isNotBlank() }
+        val connectTime = details?.connectTimeMillis ?: 0L
+
+        val isIncoming = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+            details?.callDirection == Call.Details.DIRECTION_INCOMING
+        } else {
+            state == CallLifecycleState.RINGING
+        }
 
         val initialModel = VozCallUiModel(
             callId = callId,
             rawNumber = rawNumber,
             normalizedNumber = normalized,
             displayName = callerDisplay,
+            photoUri = null,
             state = state,
-            connectTimeMillis = call.details?.connectTimeMillis ?: 0L,
-            canHold = ((call.details?.callCapabilities ?: 0) and Call.Details.CAPABILITY_HOLD) != 0
+            connectTimeMillis = connectTime,
+            isIncoming = isIncoming
         )
 
+        CallManager.onCallAdded(call, callerDisplay, null)
+        CallSessionController.registerCall(call, initialModel)
+
+        // Enrich with local metadata in background
         serviceScope.launch {
-            val db = VozDatabase.getInstance(applicationContext)
-            val assistRepo = VozAssistRepository(db.vozAssistDao())
-
-            // Enforce user-managed blocklist on incoming calls
-            if (state == CallLifecycleState.RINGING && rawNumber.isNotBlank() && assistRepo.isBlocked(rawNumber)) {
-                call.reject(false, null)
-                return@launch
-            }
-
-            CallSessionController.registerCall(call, initialModel)
-
-            // Enrich with authorized local contact & VOZ Call Assist note
-            val contactsRepo = ContactsRepository(applicationContext)
-            var resolvedName = callerDisplay
-            var resolvedPhoto: String? = null
-            var isKnown = false
-
-            if (rawNumber.isNotBlank()) {
-                when (val result = contactsRepo.loadAuthorizedContacts()) {
-                    is ContactsLoadResult.Success -> {
-                        val matched = result.contacts.firstOrNull { contact ->
-                            contact.numbers.any { num ->
-                                num.normalizedNumber == normalized ||
-                                    PhoneNormalizer.areNumbersEquivalent(num.rawNumber, rawNumber)
-                            }
-                        }
-                        if (matched != null) {
-                            resolvedName = matched.displayName
-                            resolvedPhoto = matched.photoUri
-                            isKnown = true
-                        }
-                    }
-                    else -> Unit
-                }
-            }
-
-            val assistEntity = if (normalized.isNotBlank()) {
-                db.vozAssistDao().getAssistForNumber(normalized)
-            } else {
-                null
-            }
-
-            CallSessionController.updateEnrichedMetadata(
-                callId = callId,
-                displayName = resolvedName ?: assistEntity?.displayNameHint?.takeIf { it.isNotBlank() },
-                photoUri = resolvedPhoto,
-                assistNote = assistEntity?.note?.takeIf { it.isNotBlank() },
-                assistLabel = assistEntity?.customLabel?.takeIf { it.isNotBlank() },
-                isKnownContact = isKnown
-            )
-
-            val title = resolvedName ?: rawNumber.ifBlank { getString(R.string.unknown_caller) }
-            showCallNotification(callId, title, state == CallLifecycleState.RINGING)
+            try {
+                val assist = database?.assistDao()?.getAssistByKey(normalized)
+                CallSessionController.updateEnrichedMetadata(
+                    callId = callId,
+                    displayName = callerDisplay,
+                    photoUri = null,
+                    assistNote = assist?.note,
+                    assistLabel = assist?.customLabel,
+                    isImportant = assist?.isImportant ?: false
+                )
+            } catch (_: Exception) {}
         }
 
-        // Launch InCallActivity for active or ringing call
-        val activityIntent = Intent(this, InCallActivity::class.java).apply {
+        val callerTitle = callerDisplay ?: PhoneNormalizer.formatForDisplay(rawNumber).ifBlank { "Unknown Caller" }
+        showCallNotification(callId, callerTitle, state == CallLifecycleState.RINGING)
+
+        // Launch in-call UI activity
+        val intent = Intent(this, InCallActivity::class.java).apply {
             addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_SINGLE_TOP)
         }
-        runCatching { startActivity(activityIntent) }
+        try {
+            startActivity(intent)
+        } catch (_: Exception) {}
     }
 
     override fun onCallRemoved(call: Call) {
         super.onCallRemoved(call)
+        CallManager.onCallRemoved(call)
         CallSessionController.unregisterCall(call)
         if (CallSessionController.activeCalls.value.isEmpty()) {
             cancelCallNotification()
@@ -129,10 +113,12 @@ class VozInCallService : InCallService() {
 
     override fun onCallAudioStateChanged(audioState: CallAudioState?) {
         super.onCallAudioStateChanged(audioState)
+        CallManager.onAudioStateChanged(audioState)
         CallSessionController.onAudioStateChanged(audioState)
     }
 
     override fun onDestroy() {
+        CallManager.detachInCallService(this)
         CallSessionController.detachService(this)
         cancelCallNotification()
         serviceScope.cancel()
@@ -141,20 +127,22 @@ class VozInCallService : InCallService() {
 
     private fun ensureNotificationChannel() {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-            val nm = getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
+            val nm = getSystemService(Context.NOTIFICATION_SERVICE) as? NotificationManager ?: return
             val channel = NotificationChannel(
                 CHANNEL_ID,
                 "VOZ Active & Incoming Calls",
                 NotificationManager.IMPORTANCE_HIGH
             ).apply {
                 description = "Displays incoming and ongoing telephone calls"
+                setSound(null, null) // Avoid double ring when system dialer manages ringtone
             }
             nm.createNotificationChannel(channel)
         }
     }
 
     private fun showCallNotification(callId: String, callerTitle: String, isIncoming: Boolean) {
-        val nm = getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
+        val nm = getSystemService(Context.NOTIFICATION_SERVICE) as? NotificationManager ?: return
+
         val fullScreenIntent = Intent(this, InCallActivity::class.java).apply {
             flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_SINGLE_TOP
         }
@@ -201,9 +189,7 @@ class VozInCallService : InCallService() {
         val notification = NotificationCompat.Builder(this, CHANNEL_ID)
             .setSmallIcon(android.R.drawable.sym_action_call)
             .setContentTitle(callerTitle)
-            .setContentText(
-                if (isIncoming) getString(R.string.incoming_call_label) else getString(R.string.ongoing_call_label)
-            )
+            .setContentText(getString(if (isIncoming) R.string.incoming_call_label else R.string.ongoing_call_label))
             .setPriority(NotificationCompat.PRIORITY_MAX)
             .setCategory(NotificationCompat.CATEGORY_CALL)
             .setOngoing(true)
@@ -212,18 +198,13 @@ class VozInCallService : InCallService() {
             .setStyle(style)
             .build()
 
-        runCatching {
+        try {
             nm.notify(NOTIFICATION_ID, notification)
-        }
+        } catch (_: Exception) {}
     }
 
     private fun cancelCallNotification() {
-        val nm = getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
+        val nm = getSystemService(Context.NOTIFICATION_SERVICE) as? NotificationManager ?: return
         nm.cancel(NOTIFICATION_ID)
-    }
-
-    companion object {
-        private const val CHANNEL_ID = "voz_calls_channel"
-        private const val NOTIFICATION_ID = 4001
     }
 }

@@ -1,5 +1,9 @@
 package com.example.ui.screens
 
+import android.content.Intent
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.slideInVertically
+import androidx.compose.animation.slideOutVertically
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -17,607 +21,551 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.CallMade
+import androidx.compose.material.icons.automirrored.filled.CallMissed
+import androidx.compose.material.icons.automirrored.filled.CallReceived
 import androidx.compose.material.icons.filled.Call
-import androidx.compose.material.icons.filled.CheckCircle
+import androidx.compose.material.icons.filled.CallEnd
 import androidx.compose.material.icons.filled.Clear
 import androidx.compose.material.icons.filled.Dialpad
-import androidx.compose.material.icons.filled.NotificationsActive
+import androidx.compose.material.icons.filled.Favorite
+import androidx.compose.material.icons.filled.Phone
 import androidx.compose.material.icons.filled.Search
+import androidx.compose.material.icons.filled.Shield
 import androidx.compose.material.icons.filled.Star
-import androidx.compose.material.icons.outlined.Lock
-import androidx.compose.material.icons.outlined.PhoneCallback
-import androidx.compose.material.icons.outlined.VerifiedUser
-import androidx.compose.material3.Button
-import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
-import androidx.compose.material3.ExtendedFloatingActionButton
+import androidx.compose.material3.FloatingActionButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
-import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.remember
+import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.example.R
-import com.example.data.local.CallReminderEntity
+import com.example.domain.CallHistoryGrouper
 import com.example.domain.CallRecord
+import com.example.domain.CallType
 import com.example.domain.ContactItem
+import com.example.domain.GroupedCallSession
 import com.example.domain.PhoneNormalizer
+import com.example.telecom.CallLifecycleState
+import com.example.telecom.CallManager
+import com.example.telecom.InCallActivity
 import com.example.ui.VozUiState
-import com.example.ui.components.ContactRowCard
-import com.example.ui.components.GroupedCallSessionCard
-import com.example.ui.components.SmartDialpadPanel
-import com.example.ui.theme.CallMissedAmber
-import com.example.ui.theme.JetBrainsMonoFontFamily
+import com.example.ui.components.SmartDialpad
 
 @Composable
 fun HomeScreen(
     uiState: VozUiState,
     onSearchOrDialChange: (String) -> Unit,
-    onDialpadDigit: (Char) -> Unit,
-    onDialpadBackspace: () -> Unit,
-    onDialpadClearAll: () -> Unit,
+    onDigitPressed: (Char) -> Unit,
+    onBackspace: () -> Unit,
+    onClearAll: () -> Unit,
     onToggleDialpad: (Boolean) -> Unit,
-    onRequestCall: (number: String, name: String) -> Unit,
-    onOpenContactDetail: (ContactItem) -> Unit,
-    onOpenCallRecordDetail: (CallRecord) -> Unit,
-    onCompleteReminder: (Long) -> Unit,
-    onRequestPermissionsClick: () -> Unit,
-    onRequestDefaultDialerClick: () -> Unit,
+    onPlaceCall: (rawNumber: String, displayName: String?, explicitSimId: String?) -> Unit,
+    onContactClick: (ContactItem) -> Unit,
+    onRecordClick: (CallRecord) -> Unit,
+    onGrantPermissionsClick: () -> Unit,
+    onRequestDefaultDialer: () -> Unit = {},
     modifier: Modifier = Modifier
 ) {
-    val query = uiState.homeSearchOrDialInput.trim()
-    val isDialableQuery = remember(query) {
-        PhoneNormalizer.isValidDialableNumber(query)
-    }
+    val context = LocalContext.current
+    val activeCallModel by CallManager.activeCall.collectAsStateWithLifecycle()
 
     Box(modifier = modifier.fillMaxSize()) {
-        LazyColumn(
+        Column(
             modifier = Modifier
                 .fillMaxSize()
-                .testTag("home_lazy_column"),
-            contentPadding = PaddingValues(
-                start = 16.dp,
-                end = 16.dp,
-                top = 12.dp,
-                bottom = if (uiState.isDialpadVisible) 410.dp else 100.dp
-            ),
-            verticalArrangement = Arrangement.spacedBy(12.dp)
+                .padding(horizontal = 16.dp)
         ) {
-            // 1. Editorial VOZ Brand Header & Trust Status
-            item(key = "home_header") {
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.SpaceBetween
-                ) {
-                    Column {
-                        Row(verticalAlignment = Alignment.CenterVertically) {
-                            Text(
-                                text = stringResource(R.string.app_name),
-                                style = MaterialTheme.typography.headlineLarge,
-                                color = MaterialTheme.colorScheme.onBackground,
-                                modifier = Modifier.testTag("voz_brand_header")
-                            )
-                            Spacer(modifier = Modifier.width(10.dp))
-                            Surface(
-                                color = MaterialTheme.colorScheme.primaryContainer,
-                                shape = RoundedCornerShape(50)
-                            ) {
-                                Row(
-                                    modifier = Modifier.padding(horizontal = 10.dp, vertical = 4.dp),
-                                    verticalAlignment = Alignment.CenterVertically
-                                ) {
-                                    Icon(
-                                        imageVector = Icons.Outlined.Lock,
-                                        contentDescription = null,
-                                        tint = MaterialTheme.colorScheme.onPrimaryContainer,
-                                        modifier = Modifier.size(13.dp)
-                                    )
-                                    Spacer(modifier = Modifier.width(4.dp))
-                                    Text(
-                                        text = "OFFLINE-FIRST",
-                                        style = MaterialTheme.typography.labelSmall,
-                                        color = MaterialTheme.colorScheme.onPrimaryContainer
-                                    )
-                                }
-                            }
-                        }
-                        Text(
-                            text = stringResource(R.string.app_tagline),
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
-                        )
-                    }
+            Spacer(modifier = Modifier.height(8.dp))
 
-                    if (uiState.missedCallCount > 0) {
-                        Surface(
-                            color = CallMissedAmber.copy(alpha = 0.16f),
-                            shape = RoundedCornerShape(50)
-                        ) {
-                            Text(
-                                text = "${uiState.missedCallCount} Missed",
-                                style = MaterialTheme.typography.labelMedium,
-                                fontWeight = FontWeight.Bold,
-                                color = CallMissedAmber,
-                                modifier = Modifier
-                                    .padding(horizontal = 12.dp, vertical = 6.dp)
-                                    .testTag("home_missed_badge")
-                            )
-                        }
-                    }
-                }
-            }
-
-            // 2. Fast Intent-First Search Field (Name, বাংলা, or T9 Digits)
-            item(key = "home_search_bar") {
-                OutlinedTextField(
-                    value = uiState.homeSearchOrDialInput,
-                    onValueChange = onSearchOrDialChange,
-                    placeholder = {
-                        Text(
-                            text = stringResource(R.string.search_placeholder),
-                            maxLines = 1,
-                            overflow = TextOverflow.Ellipsis
-                        )
-                    },
-                    leadingIcon = {
-                        Icon(
-                            imageVector = Icons.Filled.Search,
-                            contentDescription = null,
-                            tint = MaterialTheme.colorScheme.primary
-                        )
-                    },
-                    trailingIcon = {
-                        Row(verticalAlignment = Alignment.CenterVertically) {
-                            if (uiState.homeSearchOrDialInput.isNotEmpty()) {
-                                IconButton(
-                                    onClick = onDialpadClearAll,
-                                    modifier = Modifier.testTag("home_search_clear_button")
-                                ) {
-                                    Icon(
-                                        imageVector = Icons.Filled.Clear,
-                                        contentDescription = "Clear search"
-                                    )
-                                }
-                            }
-                            IconButton(
-                                onClick = { onToggleDialpad(!uiState.isDialpadVisible) },
-                                modifier = Modifier.testTag("home_toggle_dialpad_icon")
-                            ) {
-                                Icon(
-                                    imageVector = Icons.Filled.Dialpad,
-                                    contentDescription = stringResource(R.string.open_dialpad),
-                                    tint = if (uiState.isDialpadVisible) {
-                                        MaterialTheme.colorScheme.primary
-                                    } else {
-                                        MaterialTheme.colorScheme.onSurfaceVariant
-                                    }
-                                )
-                            }
-                        }
-                    },
-                    singleLine = true,
-                    shape = RoundedCornerShape(20.dp),
-                    colors = OutlinedTextFieldDefaults.colors(
-                        focusedContainerColor = MaterialTheme.colorScheme.surface,
-                        unfocusedContainerColor = MaterialTheme.colorScheme.surface
-                    ),
+            // Active Call Banner (if a call is ongoing, shows tap to return)
+            if (activeCallModel != null) {
+                val call = activeCallModel!!
+                Card(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .testTag("home_search_input")
-                )
-            }
-
-            // 3. Direct Dial Prompt when user entered a valid phone number
-            if (query.isNotEmpty() && isDialableQuery) {
-                item(key = "direct_dial_card") {
-                    val prefixDesc = PhoneNormalizer.describeNumberPrefix(query)
-                    Card(
+                        .padding(bottom = 8.dp)
+                        .clickable {
+                            val intent = Intent(context, InCallActivity::class.java).apply {
+                                flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_SINGLE_TOP
+                            }
+                            context.startActivity(intent)
+                        }
+                        .testTag("active_call_banner"),
+                    colors = CardDefaults.cardColors(
+                        containerColor = if (call.state == CallLifecycleState.ACTIVE) Color(0xFF142416) else Color(0xFF131A20)
+                    ),
+                    border = BorderStroke(1.dp, if (call.state == CallLifecycleState.ACTIVE) Color(0xFFA3E635) else Color(0xFF202A32)),
+                    shape = RoundedCornerShape(16.dp)
+                ) {
+                    Row(
                         modifier = Modifier
                             .fillMaxWidth()
-                            .clickable { onRequestCall(query, "") }
-                            .testTag("direct_dial_action_card"),
-                        colors = CardDefaults.cardColors(
-                            containerColor = MaterialTheme.colorScheme.primaryContainer
-                        ),
-                        shape = MaterialTheme.shapes.medium
+                            .padding(12.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.SpaceBetween
+                    ) {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Box(
+                                modifier = Modifier
+                                    .size(36.dp)
+                                    .clip(CircleShape)
+                                    .background(Color(0xFFA3E635).copy(alpha = 0.2f)),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Filled.Call,
+                                    contentDescription = null,
+                                    tint = Color(0xFFA3E635),
+                                    modifier = Modifier.size(20.dp)
+                                )
+                            }
+                            Spacer(modifier = Modifier.width(12.dp))
+                            Column {
+                                Text(
+                                    text = call.displayName ?: PhoneNormalizer.formatForDisplay(call.rawNumber),
+                                    style = MaterialTheme.typography.titleMedium,
+                                    color = Color.White,
+                                    fontWeight = FontWeight.Bold
+                                )
+                                Text(
+                                    text = if (call.state == CallLifecycleState.ACTIVE) "Active Carrier Call • Tap to view"
+                                    else "Dialing… • Tap to view",
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = Color.White.copy(alpha = 0.8f)
+                                )
+                            }
+                        }
+
+                        IconButton(
+                            onClick = { CallManager.declineOrHangup() },
+                            modifier = Modifier.testTag("banner_hangup_btn")
+                        ) {
+                            Icon(Icons.Filled.CallEnd, contentDescription = "Hang Up", tint = Color(0xFFEF4444))
+                        }
+                    }
+                }
+            } else if (!uiState.isDefaultDialer) {
+                // Setup Default Phone App Role banner for Truecaller-style caller screen capability
+                Card(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(bottom = 8.dp)
+                        .clickable { onRequestDefaultDialer() }
+                        .testTag("home_default_dialer_banner"),
+                    colors = CardDefaults.cardColors(containerColor = Color(0xFF131A20)),
+                    border = BorderStroke(1.dp, Color(0xFFA3E635).copy(alpha = 0.4f)),
+                    shape = RoundedCornerShape(14.dp)
+                ) {
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(horizontal = 14.dp, vertical = 10.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.SpaceBetween
                     ) {
                         Row(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .padding(horizontal = 16.dp, vertical = 14.dp),
                             verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.SpaceBetween
+                            modifier = Modifier.weight(1f)
                         ) {
-                            Column(modifier = Modifier.weight(1f)) {
-                                Text(
-                                    text = stringResource(R.string.direct_dial_prompt, query),
-                                    style = MaterialTheme.typography.titleMedium,
-                                    fontWeight = FontWeight.Bold,
-                                    color = MaterialTheme.colorScheme.onPrimaryContainer
-                                )
-                                if (prefixDesc != null) {
-                                    Text(
-                                        text = prefixDesc,
-                                        style = MaterialTheme.typography.labelSmall,
-                                        color = MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.8f)
-                                    )
-                                }
-                            }
                             Icon(
-                                imageVector = Icons.Filled.Call,
+                                imageVector = Icons.Default.Shield,
                                 contentDescription = null,
-                                tint = MaterialTheme.colorScheme.onPrimaryContainer
+                                tint = Color(0xFFA3E635),
+                                modifier = Modifier.size(20.dp)
                             )
+                            Spacer(modifier = Modifier.width(10.dp))
+                            Column {
+                                Text(
+                                    text = "Enable Custom Caller Screen",
+                                    style = MaterialTheme.typography.titleSmall,
+                                    fontWeight = FontWeight.Bold,
+                                    color = Color.White
+                                )
+                                Text(
+                                    text = "Set VOZ as default phone app for full in-call protection",
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = Color.White.copy(alpha = 0.7f)
+                                )
+                            }
                         }
+                        Text(
+                            text = "SET",
+                            style = MaterialTheme.typography.labelLarge,
+                            fontWeight = FontWeight.Bold,
+                            color = Color(0xFFA3E635),
+                            modifier = Modifier.padding(start = 8.dp)
+                        )
                     }
                 }
             }
 
-            // 4. Matching Contacts when searching or typing on T9 keypad
-            if (query.isNotEmpty()) {
-                if (uiState.homeMatchedContacts.isNotEmpty()) {
-                    item(key = "matched_contacts_header") {
-                        Text(
-                            text = "${stringResource(R.string.section_matched_contacts)} (${uiState.homeMatchedContacts.size})",
-                            style = MaterialTheme.typography.labelLarge,
-                            color = MaterialTheme.colorScheme.primary
-                        )
+            // Top Search / Dialbar
+            OutlinedTextField(
+                value = uiState.homeSearchOrDialInput,
+                onValueChange = onSearchOrDialChange,
+                placeholder = { Text(stringResource(R.string.search_placeholder)) },
+                leadingIcon = {
+                    Icon(imageVector = Icons.Default.Search, contentDescription = null)
+                },
+                trailingIcon = {
+                    if (uiState.homeSearchOrDialInput.isNotEmpty()) {
+                        IconButton(onClick = onClearAll) {
+                            Icon(imageVector = Icons.Default.Clear, contentDescription = "Clear")
+                        }
                     }
-                    items(
-                        items = uiState.homeMatchedContacts,
-                        key = { "match_${it.contactId}_${it.primaryNormalizedNumber}" }
-                    ) { contact ->
-                        ContactRowCard(
-                            contact = contact,
-                            onCallClick = { onRequestCall(it.primaryNumber, it.displayName) },
-                            onDetailClick = onOpenContactDetail
-                        )
+                },
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .testTag("home_search_input"),
+                singleLine = true,
+                shape = RoundedCornerShape(24.dp)
+            )
+
+            Spacer(modifier = Modifier.height(12.dp))
+
+            // Main Content: If search/dial input is active, show matching contacts; otherwise show pinned & recent calls
+            if (uiState.homeSearchOrDialInput.isNotEmpty()) {
+                // Matching contacts / Direct call header
+                LazyColumn(
+                    modifier = Modifier.weight(1f),
+                    contentPadding = PaddingValues(bottom = if (uiState.isDialpadVisible) 360.dp else 90.dp)
+                ) {
+                    val sanitized = PhoneNormalizer.sanitizeDialInput(uiState.homeSearchOrDialInput)
+                    if (sanitized.isNotEmpty()) {
+                        item {
+                            Card(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(vertical = 4.dp)
+                                    .clickable { onPlaceCall(sanitized, null, null) }
+                                    .testTag("direct_dial_card"),
+                                colors = CardDefaults.cardColors(
+                                    containerColor = MaterialTheme.colorScheme.primaryContainer
+                                ),
+                                shape = RoundedCornerShape(16.dp)
+                            ) {
+                                Row(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .padding(14.dp),
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    horizontalArrangement = Arrangement.SpaceBetween
+                                ) {
+                                    Row(verticalAlignment = Alignment.CenterVertically) {
+                                        Box(
+                                            modifier = Modifier
+                                                .size(40.dp)
+                                                .clip(CircleShape)
+                                                .background(MaterialTheme.colorScheme.primary),
+                                            contentAlignment = Alignment.Center
+                                        ) {
+                                            Icon(
+                                                Icons.Filled.Call,
+                                                contentDescription = null,
+                                                tint = MaterialTheme.colorScheme.onPrimary,
+                                                modifier = Modifier.size(20.dp)
+                                            )
+                                        }
+                                        Spacer(modifier = Modifier.width(12.dp))
+                                        Column {
+                                            Text(
+                                                text = "Direct Call",
+                                                style = MaterialTheme.typography.labelMedium,
+                                                color = MaterialTheme.colorScheme.onPrimaryContainer
+                                            )
+                                            Text(
+                                                text = PhoneNormalizer.formatForDisplay(sanitized),
+                                                style = MaterialTheme.typography.titleMedium,
+                                                fontWeight = FontWeight.Bold,
+                                                color = MaterialTheme.colorScheme.onPrimaryContainer
+                                            )
+                                        }
+                                    }
+
+                                    Icon(
+                                        Icons.AutoMirrored.Filled.CallMade,
+                                        contentDescription = null,
+                                        tint = MaterialTheme.colorScheme.primary
+                                    )
+                                }
+                            }
+                            Spacer(modifier = Modifier.height(8.dp))
+                        }
                     }
-                } else if (!uiState.hasContactsPermission) {
-                    item(key = "search_contacts_perm_prompt") {
-                        PermissionInlineCard(
-                            title = stringResource(R.string.contacts_permission_title),
-                            body = stringResource(R.string.contacts_permission_body),
-                            buttonLabel = stringResource(R.string.grant_permission),
-                            testTag = "home_grant_contacts_button",
-                            onAction = onRequestPermissionsClick
-                        )
+
+                    if (uiState.filteredContacts.isNotEmpty()) {
+                        item {
+                            Text(
+                                text = stringResource(R.string.section_matched_contacts),
+                                style = MaterialTheme.typography.labelLarge,
+                                fontWeight = FontWeight.Bold,
+                                color = MaterialTheme.colorScheme.primary,
+                                modifier = Modifier.padding(vertical = 6.dp)
+                            )
+                        }
+
+                        items(uiState.filteredContacts, key = { it.contactId }) { contact ->
+                            ContactRowItem(
+                                contact = contact,
+                                onClick = { onContactClick(contact) },
+                                onCall = { onPlaceCall(contact.primaryNumber, contact.displayName, null) }
+                            )
+                        }
+                    } else if (sanitized.isEmpty()) {
+                        item {
+                            Box(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(vertical = 32.dp),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                Text(
+                                    text = "No matching contacts found",
+                                    style = MaterialTheme.typography.bodyMedium,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                )
+                            }
+                        }
                     }
                 }
             } else {
-                // 5. Default Dialer Role Banner if not yet Default Dialer
-                if (!uiState.isDefaultDialer) {
-                    item(key = "default_dialer_banner") {
-                        Card(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .testTag("home_default_dialer_card"),
-                            colors = CardDefaults.cardColors(
-                                containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.7f)
-                            ),
-                            shape = MaterialTheme.shapes.medium
-                        ) {
-                            Row(
+                // Normal Home Screen (Favorites + Recent Calls)
+                LazyColumn(
+                    modifier = Modifier.weight(1f),
+                    contentPadding = PaddingValues(bottom = if (uiState.isDialpadVisible) 360.dp else 90.dp)
+                ) {
+                    // Pinned / Favorites row
+                    val favorites = uiState.allContacts.filter { it.isFavorite || it.isImportant }
+                    if (favorites.isNotEmpty()) {
+                        item {
+                            Text(
+                                text = stringResource(R.string.section_favorites),
+                                style = MaterialTheme.typography.titleMedium,
+                                fontWeight = FontWeight.Bold,
+                                color = MaterialTheme.colorScheme.primary,
+                                modifier = Modifier.padding(vertical = 6.dp)
+                            )
+                            LazyRow(
                                 modifier = Modifier
                                     .fillMaxWidth()
-                                    .padding(16.dp),
-                                verticalAlignment = Alignment.CenterVertically
+                                    .padding(vertical = 4.dp),
+                                horizontalArrangement = Arrangement.spacedBy(12.dp)
                             ) {
-                                Icon(
-                                    imageVector = Icons.Outlined.VerifiedUser,
-                                    contentDescription = null,
-                                    tint = MaterialTheme.colorScheme.primary,
-                                    modifier = Modifier.size(28.dp)
-                                )
-                                Spacer(modifier = Modifier.width(12.dp))
-                                Column(modifier = Modifier.weight(1f)) {
-                                    Text(
-                                        text = stringResource(R.string.role_dialer_card_title),
-                                        style = MaterialTheme.typography.titleSmall,
-                                        color = MaterialTheme.colorScheme.onSurface
+                                items(favorites, key = { it.contactId }) { fav ->
+                                    FavoriteContactBubble(
+                                        contact = fav,
+                                        onClick = { onContactClick(fav) },
+                                        onCall = { onPlaceCall(fav.primaryNumber, fav.displayName, null) }
                                     )
+                                }
+                            }
+                            Spacer(modifier = Modifier.height(12.dp))
+                        }
+                    }
+
+                    // Recent Calls section
+                    item {
+                        Text(
+                            text = stringResource(R.string.section_recent_calls),
+                            style = MaterialTheme.typography.titleMedium,
+                            fontWeight = FontWeight.Bold,
+                            color = MaterialTheme.colorScheme.onSurface,
+                            modifier = Modifier.padding(vertical = 6.dp)
+                        )
+                    }
+
+                    if (!uiState.hasCallLogPermission) {
+                        item {
+                            PermissionPromptCard(
+                                title = stringResource(R.string.call_log_permission_title),
+                                body = stringResource(R.string.call_log_permission_body),
+                                onGrant = onGrantPermissionsClick
+                            )
+                        }
+                    } else if (uiState.groupedCalls.isEmpty()) {
+                        item {
+                            Box(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(vertical = 40.dp),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                                    Icon(
+                                        imageVector = Icons.Filled.Phone,
+                                        contentDescription = null,
+                                        tint = MaterialTheme.colorScheme.outline,
+                                        modifier = Modifier.size(48.dp)
+                                    )
+                                    Spacer(modifier = Modifier.height(12.dp))
                                     Text(
-                                        text = stringResource(R.string.role_dialer_inactive),
+                                        text = stringResource(R.string.call_log_empty_title),
+                                        style = MaterialTheme.typography.titleMedium,
+                                        fontWeight = FontWeight.Bold
+                                    )
+                                    Spacer(modifier = Modifier.height(4.dp))
+                                    Text(
+                                        text = stringResource(R.string.call_log_empty_subtitle),
                                         style = MaterialTheme.typography.bodySmall,
                                         color = MaterialTheme.colorScheme.onSurfaceVariant
                                     )
                                 }
-                                Spacer(modifier = Modifier.width(8.dp))
-                                OutlinedButton(
-                                    onClick = onRequestDefaultDialerClick,
-                                    modifier = Modifier.testTag("home_set_default_dialer_button")
-                                ) {
-                                    Text(text = "Enable")
-                                }
                             }
                         }
-                    }
-                }
-
-                // 6. Active Call-Back Reminders (VOZ Call Assist)
-                if (uiState.activeReminders.isNotEmpty()) {
-                    item(key = "reminders_header") {
-                        Text(
-                            text = stringResource(R.string.section_reminders),
-                            style = MaterialTheme.typography.labelLarge,
-                            color = MaterialTheme.colorScheme.primary
-                        )
-                    }
-                    items(
-                        items = uiState.activeReminders,
-                        key = { "reminder_${it.id}" }
-                    ) { reminder ->
-                        ReminderRowCard(
-                            reminder = reminder,
-                            onCallNow = { onRequestCall(reminder.rawNumber, reminder.contactName) },
-                            onComplete = { onCompleteReminder(reminder.id) }
-                        )
-                    }
-                }
-
-                // 7. Pinned & Important Contacts (VOZ Call Assist)
-                if (uiState.pinnedAndImportantContacts.isNotEmpty()) {
-                    item(key = "favorites_header") {
-                        Text(
-                            text = stringResource(R.string.section_favorites),
-                            style = MaterialTheme.typography.labelLarge,
-                            color = MaterialTheme.colorScheme.primary
-                        )
-                    }
-                    item(key = "favorites_row") {
-                        LazyRow(
-                            horizontalArrangement = Arrangement.spacedBy(10.dp),
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .testTag("home_pinned_contacts_row")
-                        ) {
-                            items(
-                                items = uiState.pinnedAndImportantContacts,
-                                key = { "pin_${it.contactId}_${it.primaryNormalizedNumber}" }
-                            ) { pinned ->
-                                PinnedContactChipCard(
-                                    contact = pinned,
-                                    onCall = { onRequestCall(pinned.primaryNumber, pinned.displayName) },
-                                    onDetail = { onOpenContactDetail(pinned) }
-                                )
-                            }
+                    } else {
+                        items(uiState.groupedCalls, key = { it.sessionKey }) { session ->
+                            RecentCallRowItem(
+                                session = session,
+                                onClick = { onRecordClick(session.primaryRecord) },
+                                onCall = { onPlaceCall(session.primaryRecord.rawNumber, session.primaryRecord.displayName, null) }
+                            )
                         }
-                    }
-                }
-
-                // 8. Recent Communication Timeline
-                if (uiState.recentGroupedSessions.isNotEmpty()) {
-                    item(key = "recent_calls_header") {
-                        Text(
-                            text = stringResource(R.string.section_recent_calls),
-                            style = MaterialTheme.typography.labelLarge,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
-                        )
-                    }
-                    items(
-                        items = uiState.recentGroupedSessions,
-                        key = { "home_session_${it.sessionKey}" }
-                    ) { session ->
-                        GroupedCallSessionCard(
-                            session = session,
-                            languageCode = uiState.preferences.languageCode,
-                            onCallBackClick = { rec ->
-                                onRequestCall(rec.rawNumber, rec.displayIdentity)
-                            },
-                            onSessionDetailClick = onOpenCallRecordDetail
-                        )
-                    }
-                } else if (!uiState.hasContactsPermission || !uiState.hasCallLogPermission) {
-                    item(key = "home_permissions_card") {
-                        PermissionInlineCard(
-                            title = stringResource(R.string.empty_home_title),
-                            body = stringResource(R.string.empty_home_subtitle),
-                            buttonLabel = stringResource(R.string.grant_permission),
-                            testTag = "home_grant_permissions_button",
-                            onAction = onRequestPermissionsClick
-                        )
-                    }
-                } else {
-                    item(key = "home_empty_state") {
-                        EmptyStateCard(
-                            title = stringResource(R.string.empty_home_title),
-                            subtitle = stringResource(R.string.call_log_empty_subtitle)
-                        )
                     }
                 }
             }
         }
 
-        // Bottom Smart Dialpad or Floating Keypad Action Button
-        if (uiState.isDialpadVisible) {
-            SmartDialpadPanel(
-                enteredText = uiState.homeSearchOrDialInput,
-                hapticsEnabled = uiState.preferences.hapticFeedbackEnabled,
-                oneHandedMode = uiState.preferences.oneHandedModeEnabled,
-                onDigitPress = onDialpadDigit,
-                onBackspace = onDialpadBackspace,
-                onClearAll = onDialpadClearAll,
-                onPasteText = onSearchOrDialChange,
-                onPlaceCall = {
-                    val matchedName = uiState.homeMatchedContacts.firstOrNull()?.displayName.orEmpty()
-                    onRequestCall(uiState.homeSearchOrDialInput, matchedName)
-                },
-                onCollapse = { onToggleDialpad(false) },
-                modifier = Modifier.align(Alignment.BottomCenter)
-            )
-        } else {
-            ExtendedFloatingActionButton(
+        // Floating Action Button for Dialpad (when keypad sheet is closed)
+        if (!uiState.isDialpadVisible) {
+            FloatingActionButton(
                 onClick = { onToggleDialpad(true) },
-                icon = {
-                    Icon(
-                        imageVector = Icons.Filled.Dialpad,
-                        contentDescription = null
-                    )
-                },
-                text = {
-                    Text(
-                        text = stringResource(R.string.open_dialpad),
-                        fontWeight = FontWeight.Bold
-                    )
-                },
-                containerColor = MaterialTheme.colorScheme.primaryContainer,
-                contentColor = MaterialTheme.colorScheme.onPrimaryContainer,
                 modifier = Modifier
-                    .align(
-                        if (uiState.preferences.oneHandedModeEnabled) {
-                            Alignment.BottomEnd
-                        } else {
-                            Alignment.BottomEnd
-                        }
-                    )
-                    .padding(18.dp)
-                    .testTag("open_dialpad_fab")
-            )
-        }
-    }
-}
-
-@Composable
-private fun PinnedContactChipCard(
-    contact: ContactItem,
-    onCall: () -> Unit,
-    onDetail: () -> Unit
-) {
-    Card(
-        modifier = Modifier
-            .width(156.dp)
-            .clickable { onDetail() },
-        colors = CardDefaults.cardColors(
-            containerColor = MaterialTheme.colorScheme.surface
-        ),
-        shape = MaterialTheme.shapes.medium
-    ) {
-        Column(modifier = Modifier.padding(12.dp)) {
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically
+                    .align(Alignment.BottomEnd)
+                    .padding(end = 20.dp, bottom = 24.dp)
+                    .testTag("fab_open_dialpad"),
+                containerColor = MaterialTheme.colorScheme.primary,
+                contentColor = MaterialTheme.colorScheme.onPrimary
             ) {
-                Box(
-                    modifier = Modifier
-                        .size(38.dp)
-                        .clip(CircleShape)
-                        .background(MaterialTheme.colorScheme.primaryContainer),
-                    contentAlignment = Alignment.Center
-                ) {
-                    Text(
-                        text = contact.initials,
-                        style = MaterialTheme.typography.titleSmall,
-                        fontWeight = FontWeight.Bold,
-                        color = MaterialTheme.colorScheme.onPrimaryContainer
-                    )
-                }
-                IconButton(
-                    onClick = onCall,
-                    modifier = Modifier.size(36.dp)
-                ) {
-                    Icon(
-                        imageVector = Icons.Filled.Call,
-                        contentDescription = "Call ${contact.displayName}",
-                        tint = MaterialTheme.colorScheme.primary,
-                        modifier = Modifier.size(18.dp)
-                    )
-                }
+                Icon(
+                    imageVector = Icons.Filled.Dialpad,
+                    contentDescription = stringResource(R.string.open_dialpad)
+                )
             }
-            Spacer(modifier = Modifier.height(8.dp))
-            Text(
-                text = contact.displayName,
-                style = MaterialTheme.typography.titleSmall,
-                color = MaterialTheme.colorScheme.onSurface,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis
-            )
-            Text(
-                text = contact.customLabel ?: contact.primaryNumber,
-                style = MaterialTheme.typography.labelSmall.copy(fontFamily = JetBrainsMonoFontFamily),
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis
+        }
+
+        // Bottom Smart Keypad Sheet
+        AnimatedVisibility(
+            visible = uiState.isDialpadVisible,
+            enter = slideInVertically(initialOffsetY = { it }),
+            exit = slideOutVertically(targetOffsetY = { it }),
+            modifier = Modifier.align(Alignment.BottomCenter)
+        ) {
+            SmartDialpad(
+                currentInput = uiState.homeSearchOrDialInput,
+                availableSims = uiState.availableSims,
+                isSoundEnabled = uiState.preferences.dialpadSoundEnabled,
+                isHapticEnabled = uiState.preferences.hapticFeedbackEnabled,
+                onDigitPressed = onDigitPressed,
+                onBackspace = onBackspace,
+                onClearAll = onClearAll,
+                onPlaceCall = { explicitSimId ->
+                    val num = uiState.homeSearchOrDialInput.ifBlank { "" }
+                    if (num.isNotBlank()) {
+                        onPlaceCall(num, null, explicitSimId)
+                    }
+                }
             )
         }
     }
 }
 
 @Composable
-private fun ReminderRowCard(
-    reminder: CallReminderEntity,
-    onCallNow: () -> Unit,
-    onComplete: () -> Unit
+fun ContactRowItem(
+    contact: ContactItem,
+    onClick: () -> Unit,
+    onCall: () -> Unit
 ) {
     Card(
         modifier = Modifier
             .fillMaxWidth()
-            .testTag("reminder_card_${reminder.id}"),
-        colors = CardDefaults.cardColors(
-            containerColor = MaterialTheme.colorScheme.secondaryContainer
-        ),
-        shape = MaterialTheme.shapes.medium
+            .padding(vertical = 4.dp)
+            .clickable(onClick = onClick)
+            .testTag("contact_item_${contact.contactId}"),
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.4f)),
+        shape = RoundedCornerShape(12.dp)
     ) {
         Row(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(horizontal = 14.dp, vertical = 12.dp),
-            verticalAlignment = Alignment.CenterVertically
+                .padding(12.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.SpaceBetween
         ) {
-            Icon(
-                imageVector = Icons.Filled.NotificationsActive,
-                contentDescription = null,
-                tint = MaterialTheme.colorScheme.primary,
-                modifier = Modifier.size(22.dp)
-            )
-            Spacer(modifier = Modifier.width(12.dp))
-            Column(modifier = Modifier.weight(1f)) {
-                Text(
-                    text = reminder.contactName,
-                    style = MaterialTheme.typography.titleSmall,
-                    color = MaterialTheme.colorScheme.onSecondaryContainer
-                )
-                Text(
-                    text = "${reminder.reason} • ${reminder.rawNumber}",
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSecondaryContainer.copy(alpha = 0.8f)
-                )
+            Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.weight(1f)) {
+                Box(
+                    modifier = Modifier
+                        .size(44.dp)
+                        .clip(CircleShape)
+                        .background(MaterialTheme.colorScheme.secondaryContainer),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Text(
+                        text = (contact.displayName.firstOrNull() ?: '?').uppercase(),
+                        style = MaterialTheme.typography.titleMedium,
+                        fontWeight = FontWeight.Bold,
+                        color = MaterialTheme.colorScheme.onSecondaryContainer
+                    )
+                }
+
+                Spacer(modifier = Modifier.width(12.dp))
+
+                Column {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Text(
+                            text = contact.displayName,
+                            style = MaterialTheme.typography.titleMedium,
+                            fontWeight = FontWeight.SemiBold
+                        )
+                        if (contact.isFavorite) {
+                            Spacer(modifier = Modifier.width(4.dp))
+                            Icon(Icons.Filled.Favorite, contentDescription = null, tint = Color(0xFFE91E63), modifier = Modifier.size(14.dp))
+                        }
+                    }
+                    Text(
+                        text = PhoneNormalizer.formatForDisplay(contact.primaryNumber),
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                    if (!contact.customNote.isNullOrBlank()) {
+                        Text(
+                            text = "Note: ${contact.customNote}",
+                            style = MaterialTheme.typography.labelSmall,
+                            color = MaterialTheme.colorScheme.primary,
+                            maxLines = 1
+                        )
+                    }
+                }
             }
+
             IconButton(
-                onClick = onComplete,
-                modifier = Modifier.testTag("complete_reminder_${reminder.id}")
+                onClick = onCall,
+                modifier = Modifier.testTag("call_contact_btn_${contact.contactId}")
             ) {
                 Icon(
-                    imageVector = Icons.Filled.CheckCircle,
-                    contentDescription = "Mark reminder done",
-                    tint = MaterialTheme.colorScheme.primary
-                )
-            }
-            IconButton(
-                onClick = onCallNow,
-                modifier = Modifier.testTag("call_reminder_${reminder.id}")
-            ) {
-                Icon(
-                    imageVector = Icons.Filled.Call,
-                    contentDescription = "Call ${reminder.contactName}",
-                    tint = MaterialTheme.colorScheme.primary
+                    Icons.Filled.Call,
+                    contentDescription = "Call",
+                    tint = Color(0xFF2E7D32)
                 )
             }
         }
@@ -625,96 +573,169 @@ private fun ReminderRowCard(
 }
 
 @Composable
-fun PermissionInlineCard(
+fun FavoriteContactBubble(
+    contact: ContactItem,
+    onClick: () -> Unit,
+    onCall: () -> Unit
+) {
+    Column(
+        horizontalAlignment = Alignment.CenterHorizontally,
+        modifier = Modifier
+            .width(72.dp)
+            .clickable(onClick = onClick)
+            .testTag("fav_bubble_${contact.contactId}")
+    ) {
+        Box(
+            modifier = Modifier
+                .size(54.dp)
+                .clip(CircleShape)
+                .background(MaterialTheme.colorScheme.primaryContainer),
+            contentAlignment = Alignment.Center
+        ) {
+            Text(
+                text = (contact.displayName.firstOrNull() ?: '?').uppercase(),
+                style = MaterialTheme.typography.titleLarge,
+                fontWeight = FontWeight.Bold,
+                color = MaterialTheme.colorScheme.onPrimaryContainer
+            )
+        }
+        Spacer(modifier = Modifier.height(4.dp))
+        Text(
+            text = contact.displayName.split(" ").firstOrNull() ?: contact.displayName,
+            style = MaterialTheme.typography.labelMedium,
+            fontWeight = FontWeight.Medium,
+            maxLines = 1
+        )
+    }
+}
+
+@Composable
+fun RecentCallRowItem(
+    session: GroupedCallSession,
+    onClick: () -> Unit,
+    onCall: () -> Unit
+) {
+    val record = session.primaryRecord
+    val isMissed = record.callType == CallType.MISSED || record.callType == CallType.REJECTED
+
+    Card(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(vertical = 4.dp)
+            .clickable(onClick = onClick)
+            .testTag("recent_call_item_${record.id}"),
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.35f)),
+        shape = RoundedCornerShape(12.dp)
+    ) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 12.dp, vertical = 10.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.SpaceBetween
+        ) {
+            Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.weight(1f)) {
+                // Call type icon
+                val icon = when (record.callType) {
+                    CallType.INCOMING -> Icons.AutoMirrored.Filled.CallReceived
+                    CallType.OUTGOING -> Icons.AutoMirrored.Filled.CallMade
+                    CallType.MISSED -> Icons.AutoMirrored.Filled.CallMissed
+                    CallType.REJECTED -> Icons.AutoMirrored.Filled.CallMissed
+                    CallType.BLOCKED -> Icons.Filled.Clear
+                }
+                val iconColor = when (record.callType) {
+                    CallType.MISSED, CallType.REJECTED -> Color(0xFFD32F2F)
+                    CallType.OUTGOING -> Color(0xFF1976D2)
+                    CallType.INCOMING -> Color(0xFF388E3C)
+                    CallType.BLOCKED -> Color(0xFF757575)
+                }
+
+                Box(
+                    modifier = Modifier
+                        .size(38.dp)
+                        .clip(CircleShape)
+                        .background(iconColor.copy(alpha = 0.15f)),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Icon(icon, contentDescription = null, tint = iconColor, modifier = Modifier.size(20.dp))
+                }
+
+                Spacer(modifier = Modifier.width(12.dp))
+
+                Column {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Text(
+                            text = record.displayName ?: PhoneNormalizer.formatForDisplay(record.rawNumber),
+                            style = MaterialTheme.typography.titleMedium,
+                            fontWeight = if (isMissed) FontWeight.Bold else FontWeight.SemiBold,
+                            color = if (isMissed) Color(0xFFD32F2F) else MaterialTheme.colorScheme.onSurface
+                        )
+                        if (session.totalAttempts > 1) {
+                            Text(
+                                text = " (${session.totalAttempts})",
+                                style = MaterialTheme.typography.titleSmall,
+                                fontWeight = FontWeight.Bold,
+                                color = if (isMissed) Color(0xFFD32F2F) else MaterialTheme.colorScheme.primary
+                            )
+                        }
+                    }
+
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Text(
+                            text = CallHistoryGrouper.formatCallTime(record.timestampMillis),
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                        if (record.durationSeconds > 0) {
+                            Text(
+                                text = " • ${CallHistoryGrouper.formatDuration(record.durationSeconds)}",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        }
+                        if (!record.assistNote.isNullOrBlank()) {
+                            Text(
+                                text = " • Note: ${record.assistNote}",
+                                style = MaterialTheme.typography.labelSmall,
+                                color = MaterialTheme.colorScheme.primary,
+                                maxLines = 1
+                            )
+                        }
+                    }
+                }
+            }
+
+            IconButton(
+                onClick = onCall,
+                modifier = Modifier.testTag("call_back_btn_${record.id}")
+            ) {
+                Icon(Icons.Filled.Call, contentDescription = "Call Back", tint = Color(0xFF2E7D32))
+            }
+        }
+    }
+}
+
+@Composable
+fun PermissionPromptCard(
     title: String,
     body: String,
-    buttonLabel: String,
-    testTag: String,
-    onAction: () -> Unit,
-    onSecondarySettingsAction: (() -> Unit)? = null
+    onGrant: () -> Unit
 ) {
     Card(
         modifier = Modifier
             .fillMaxWidth()
-            .testTag("${testTag}_card"),
-        colors = CardDefaults.cardColors(
-            containerColor = MaterialTheme.colorScheme.surface
-        ),
-        shape = MaterialTheme.shapes.large
+            .padding(vertical = 8.dp),
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.tertiaryContainer),
+        shape = RoundedCornerShape(16.dp)
     ) {
-        Column(modifier = Modifier.padding(20.dp)) {
-            Text(
-                text = title,
-                style = MaterialTheme.typography.titleLarge,
-                color = MaterialTheme.colorScheme.onSurface
-            )
+        Column(modifier = Modifier.padding(16.dp)) {
+            Text(text = title, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
             Spacer(modifier = Modifier.height(6.dp))
-            Text(
-                text = body,
-                style = MaterialTheme.typography.bodyMedium,
-                color = MaterialTheme.colorScheme.onSurfaceVariant
-            )
-            Spacer(modifier = Modifier.height(14.dp))
-            Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                Button(
-                    onClick = onAction,
-                    modifier = Modifier.testTag(testTag),
-                    colors = ButtonDefaults.buttonColors(
-                        containerColor = MaterialTheme.colorScheme.primaryContainer,
-                        contentColor = MaterialTheme.colorScheme.onPrimaryContainer
-                    )
-                ) {
-                    Text(text = buttonLabel, fontWeight = FontWeight.Bold)
-                }
-                if (onSecondarySettingsAction != null) {
-                    OutlinedButton(onClick = onSecondarySettingsAction) {
-                        Text(text = stringResource(R.string.open_system_settings))
-                    }
-                }
-            }
-        }
-    }
-}
-
-@Composable
-fun EmptyStateCard(
-    title: String,
-    subtitle: String,
-    modifier: Modifier = Modifier
-) {
-    Card(
-        modifier = modifier
-            .fillMaxWidth()
-            .testTag("empty_state_card"),
-        colors = CardDefaults.cardColors(
-            containerColor = MaterialTheme.colorScheme.surface
-        ),
-        shape = MaterialTheme.shapes.large
-    ) {
-        Column(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(28.dp),
-            horizontalAlignment = Alignment.CenterHorizontally
-        ) {
-            Icon(
-                imageVector = Icons.Outlined.PhoneCallback,
-                contentDescription = null,
-                tint = MaterialTheme.colorScheme.primary,
-                modifier = Modifier.size(40.dp)
-            )
+            Text(text = body, style = MaterialTheme.typography.bodySmall)
             Spacer(modifier = Modifier.height(12.dp))
-            Text(
-                text = title,
-                style = MaterialTheme.typography.titleMedium,
-                color = MaterialTheme.colorScheme.onSurface
-            )
-            Spacer(modifier = Modifier.height(4.dp))
-            Text(
-                text = subtitle,
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant
-            )
+            androidx.compose.material3.Button(onClick = onGrant) {
+                Text(stringResource(R.string.grant_permission))
+            }
         }
     }
 }

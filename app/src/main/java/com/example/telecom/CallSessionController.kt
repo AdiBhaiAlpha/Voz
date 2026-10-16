@@ -4,56 +4,16 @@ import android.os.SystemClock
 import android.telecom.Call
 import android.telecom.CallAudioState
 import android.telecom.InCallService
-import android.telecom.VideoProfile
-import com.example.domain.PhoneNormalizer
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
-import kotlinx.coroutines.flow.update
 import java.util.concurrent.ConcurrentHashMap
 
-enum class CallLifecycleState {
-    CONNECTING,
-    DIALING,
-    RINGING,
-    ACTIVE,
-    HOLDING,
-    DISCONNECTING,
-    DISCONNECTED
-}
-
-data class VozAudioState(
-    val isMuted: Boolean = false,
-    val route: Int = CallAudioState.ROUTE_EARPIECE,
-    val supportedRouteMask: Int = CallAudioState.ROUTE_EARPIECE or CallAudioState.ROUTE_SPEAKER
-) {
-    val isSpeakerOn: Boolean
-        get() = (route and CallAudioState.ROUTE_SPEAKER) != 0
-
-    val isBluetoothOn: Boolean
-        get() = (route and CallAudioState.ROUTE_BLUETOOTH) != 0
-}
-
-data class VozCallUiModel(
-    val callId: String,
-    val rawNumber: String,
-    val normalizedNumber: String,
-    val displayName: String?,
-    val photoUri: String? = null,
-    val state: CallLifecycleState,
-    val connectTimeMillis: Long = 0L,
-    val canHold: Boolean = false,
-    val simLabel: String? = null,
-    val assistNote: String? = null,
-    val assistLabel: String? = null,
-    val isKnownContact: Boolean = false
-)
-
-/**
- * Coordinates real Android Telecom Call objects exposed by [VozInCallService] with the UI layer.
- * Includes tap-debouncing to prevent duplicate answer/decline/hangup actions during rapid taps.
- */
+@Suppress("DEPRECATION")
 object CallSessionController {
+
+    private const val ACTION_DEBOUNCE_MS = 300L
+    private var lastActionElapsedRealtime = 0L
 
     private val callMap = ConcurrentHashMap<String, Call>()
     private val callCallbacks = ConcurrentHashMap<String, Call.Callback>()
@@ -64,9 +24,6 @@ object CallSessionController {
 
     private val _audioState = MutableStateFlow(VozAudioState())
     val audioState: StateFlow<VozAudioState> = _audioState.asStateFlow()
-
-    private var lastActionElapsedRealtime = 0L
-    private const val ACTION_DEBOUNCE_MS = 350L
 
     fun attachService(service: InCallService) {
         inCallServiceRef = service
@@ -83,21 +40,31 @@ object CallSessionController {
         callMap[id] = call
 
         val callback = object : Call.Callback() {
-            override fun onStateChanged(call: Call, state: Int) {
-                updateCallFromSystem(id, call)
+            override fun onStateChanged(targetCall: Call, state: Int) {
+                updateCallFromSystem(id, targetCall)
             }
 
-            override fun onDetailsChanged(call: Call, details: Call.Details) {
-                updateCallFromSystem(id, call)
+            override fun onDetailsChanged(targetCall: Call, details: Call.Details) {
+                updateCallFromSystem(id, targetCall)
             }
         }
         callCallbacks[id] = callback
         call.registerCallback(callback)
 
-        _activeCalls.update { list ->
-            val filtered = list.filterNot { it.callId == id }
-            filtered + initialModel
+        val currentList = _activeCalls.value.filter { it.callId != id }
+        _activeCalls.value = currentList + initialModel
+    }
+
+    fun unregisterCall(call: Call) {
+        val entry = callMap.entries.firstOrNull { it.value == call } ?: return
+        val id = entry.key
+        callMap.remove(id)
+        callCallbacks.remove(id)?.let { cb ->
+            try {
+                call.unregisterCallback(cb)
+            } catch (_: Exception) {}
         }
+        _activeCalls.value = _activeCalls.value.filter { it.callId != id }
     }
 
     fun updateEnrichedMetadata(
@@ -106,121 +73,132 @@ object CallSessionController {
         photoUri: String?,
         assistNote: String?,
         assistLabel: String?,
-        isKnownContact: Boolean
+        isImportant: Boolean
     ) {
-        _activeCalls.update { list ->
-            list.map { item ->
-                if (item.callId == callId) {
-                    item.copy(
-                        displayName = displayName ?: item.displayName,
-                        photoUri = photoUri ?: item.photoUri,
-                        assistNote = assistNote ?: item.assistNote,
-                        assistLabel = assistLabel ?: item.assistLabel,
-                        isKnownContact = isKnownContact
-                    )
-                } else {
-                    item
-                }
-            }
+        _activeCalls.value = _activeCalls.value.map { model ->
+            if (model.callId == callId) {
+                model.copy(
+                    displayName = displayName ?: model.displayName,
+                    photoUri = photoUri ?: model.photoUri,
+                    assistNote = assistNote ?: model.assistNote,
+                    assistLabel = assistLabel ?: model.assistLabel,
+                    isImportant = isImportant || model.isImportant
+                )
+            } else model
         }
     }
 
-    fun unregisterCall(call: Call) {
-        val entry = callMap.entries.find { it.value === call } ?: return
-        val id = entry.key
-        callCallbacks.remove(id)?.let { call.unregisterCallback(it) }
-        callMap.remove(id)
-        _activeCalls.update { list -> list.filterNot { it.callId == id } }
-    }
-
     fun onAudioStateChanged(audioState: CallAudioState?) {
-        audioState ?: return
+        if (audioState == null) return
         _audioState.value = VozAudioState(
             isMuted = audioState.isMuted,
             route = audioState.route,
             supportedRouteMask = audioState.supportedRouteMask
         )
+        // Update isMuted and isSpeakerOn in active models
+        val isSpeaker = (audioState.route == CallAudioState.ROUTE_SPEAKER)
+        _activeCalls.value = _activeCalls.value.map { model ->
+            model.copy(isMuted = audioState.isMuted, isSpeakerOn = isSpeaker)
+        }
     }
 
     private fun updateCallFromSystem(callId: String, call: Call) {
         val mappedState = mapSystemState(call)
         val details = call.details
-        val handleNumber = details?.handle?.schemeSpecificPart.orEmpty()
-        val normalized = PhoneNormalizer.normalizeForComparison(handleNumber).ifBlank { handleNumber }
-        val canHoldCap = details != null &&
-            (details.callCapabilities and Call.Details.CAPABILITY_HOLD) != 0
+        val connectTime = details?.connectTimeMillis ?: 0L
+        val canHold = ((details?.callCapabilities ?: 0) and Call.Details.CAPABILITY_HOLD) != 0
 
-        _activeCalls.update { list ->
-            list.map { existing ->
-                if (existing.callId == callId) {
-                    existing.copy(
-                        rawNumber = handleNumber.ifBlank { existing.rawNumber },
-                        normalizedNumber = normalized.ifBlank { existing.normalizedNumber },
-                        state = mappedState,
-                        connectTimeMillis = details?.connectTimeMillis ?: existing.connectTimeMillis,
-                        canHold = canHoldCap
-                    )
-                } else {
-                    existing
-                }
-            }
+        _activeCalls.value = _activeCalls.value.map { model ->
+            if (model.callId == callId) {
+                val dur = if (connectTime > 0 && mappedState == CallLifecycleState.ACTIVE) {
+                    (System.currentTimeMillis() - connectTime) / 1000L
+                } else model.durationSeconds
+
+                model.copy(
+                    state = mappedState,
+                    connectTimeMillis = if (connectTime > 0) connectTime else model.connectTimeMillis,
+                    durationSeconds = maxOf(0L, dur),
+                    isOnHold = (mappedState == CallLifecycleState.HOLDING),
+                    isHoldSupported = canHold
+                )
+            } else model
         }
     }
 
     fun answerCall(callId: String) {
         if (!allowAction()) return
         val call = callMap[callId] ?: return
-        if (mapSystemState(call) == CallLifecycleState.RINGING) {
-            call.answer(VideoProfile.STATE_AUDIO_ONLY)
-        }
+        try {
+            call.answer(0)
+        } catch (_: Exception) {}
     }
 
     fun declineOrHangupCall(callId: String) {
         if (!allowAction()) return
         val call = callMap[callId] ?: return
-        when (mapSystemState(call)) {
-            CallLifecycleState.RINGING -> call.reject(false, null)
-            else -> call.disconnect()
-        }
+        try {
+            if (call.state == Call.STATE_RINGING) {
+                call.reject(false, null)
+            } else {
+                call.disconnect()
+            }
+        } catch (_: Exception) {}
     }
 
     fun toggleMute() {
-        val service = inCallServiceRef ?: return
-        val nextMute = !_audioState.value.isMuted
-        service.setMuted(nextMute)
-        _audioState.update { it.copy(isMuted = nextMute) }
+        if (!allowAction()) return
+        val currentMuted = _audioState.value.isMuted
+        inCallServiceRef?.setMuted(!currentMuted)
     }
 
     fun toggleSpeaker() {
+        if (!allowAction()) return
         val service = inCallServiceRef ?: return
-        val current = _audioState.value
-        val nextRoute = if (current.isSpeakerOn) {
-            CallAudioState.ROUTE_WIRED_OR_EARPIECE
+        val currentRoute = _audioState.value.route
+        val newRoute = if (currentRoute == CallAudioState.ROUTE_SPEAKER) {
+            CallAudioState.ROUTE_EARPIECE
         } else {
             CallAudioState.ROUTE_SPEAKER
         }
-        service.setAudioRoute(nextRoute)
-        _audioState.update { it.copy(route = nextRoute) }
+        service.setAudioRoute(newRoute)
     }
 
     fun toggleHold(callId: String) {
         if (!allowAction()) return
         val call = callMap[callId] ?: return
-        when (mapSystemState(call)) {
-            CallLifecycleState.HOLDING -> call.unhold()
-            CallLifecycleState.ACTIVE -> call.hold()
-            else -> Unit
-        }
+        try {
+            if (call.state == Call.STATE_HOLDING) {
+                call.unhold()
+            } else {
+                call.hold()
+            }
+        } catch (_: Exception) {}
     }
 
     fun playDtmf(callId: String, digit: Char) {
         val call = callMap[callId] ?: return
-        call.playDtmfTone(digit)
+        try {
+            call.playDtmfTone(digit)
+        } catch (_: Exception) {}
     }
 
     fun stopDtmf(callId: String) {
         val call = callMap[callId] ?: return
-        call.stopDtmfTone()
+        try {
+            call.stopDtmfTone()
+        } catch (_: Exception) {}
+    }
+
+    fun mapSystemState(call: Call): CallLifecycleState {
+        return when (call.state) {
+            Call.STATE_RINGING -> CallLifecycleState.RINGING
+            Call.STATE_DIALING, Call.STATE_CONNECTING -> CallLifecycleState.DIALING
+            Call.STATE_ACTIVE -> CallLifecycleState.ACTIVE
+            Call.STATE_HOLDING -> CallLifecycleState.HOLDING
+            Call.STATE_DISCONNECTING -> CallLifecycleState.DISCONNECTING
+            Call.STATE_DISCONNECTED -> CallLifecycleState.DISCONNECTED
+            else -> CallLifecycleState.DIALING
+        }
     }
 
     private fun allowAction(): Boolean {
@@ -230,24 +208,5 @@ object CallSessionController {
         }
         lastActionElapsedRealtime = now
         return true
-    }
-
-    @Suppress("DEPRECATION")
-    fun mapSystemState(call: Call): CallLifecycleState {
-        val rawState = if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.S) {
-            call.details?.state ?: call.state
-        } else {
-            call.state
-        }
-        return when (rawState) {
-            Call.STATE_RINGING -> CallLifecycleState.RINGING
-            Call.STATE_DIALING, Call.STATE_PULLING_CALL -> CallLifecycleState.DIALING
-            Call.STATE_CONNECTING, Call.STATE_SELECT_PHONE_ACCOUNT -> CallLifecycleState.CONNECTING
-            Call.STATE_ACTIVE -> CallLifecycleState.ACTIVE
-            Call.STATE_HOLDING -> CallLifecycleState.HOLDING
-            Call.STATE_DISCONNECTING -> CallLifecycleState.DISCONNECTING
-            Call.STATE_DISCONNECTED -> CallLifecycleState.DISCONNECTED
-            else -> CallLifecycleState.CONNECTING
-        }
     }
 }

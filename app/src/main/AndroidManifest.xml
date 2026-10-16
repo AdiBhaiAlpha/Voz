@@ -9,6 +9,8 @@
 
     <!-- Least-privilege permissions for Dialer, Contacts, Call History, and In-Call audio/notifications -->
     <!-- Notice: No INTERNET permission is requested; VOZ is strictly offline-first and private by default -->
+    <uses-permission android:name="android.permission.RECORD_AUDIO" />
+    <uses-permission android:name="android.permission.BLUETOOTH_CONNECT" />
     <uses-permission android:name="android.permission.CALL_PHONE" />
     <uses-permission android:name="android.permission.READ_CONTACTS" />
     <uses-permission android:name="android.permission.READ_CALL_LOG" />
