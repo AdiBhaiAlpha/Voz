@@ -20,7 +20,11 @@ data class VozUserPreferences(
     val preferredSimId: String = "",
     val oneHandedModeEnabled: Boolean = false,
     val reduceMotionEnabled: Boolean = false,
-    val confirmBeforeCallEnabled: Boolean = false
+    val confirmBeforeCallEnabled: Boolean = false,
+    val isVozAccountLoggedIn: Boolean = false,
+    val vozCallerId: String = "",
+    val vozAccountName: String = "",
+    val floatingIslandOverlayEnabled: Boolean = true
 )
 
 class UserPreferencesRepository(context: Context) {
@@ -50,7 +54,11 @@ class UserPreferencesRepository(context: Context) {
             preferredSimId = prefs.getString("preferred_sim_id", "") ?: "",
             oneHandedModeEnabled = prefs.getBoolean("one_handed", false),
             reduceMotionEnabled = prefs.getBoolean("reduce_motion", false),
-            confirmBeforeCallEnabled = prefs.getBoolean("confirm_before_call", false)
+            confirmBeforeCallEnabled = prefs.getBoolean("confirm_before_call", false),
+            isVozAccountLoggedIn = prefs.getBoolean("voz_account_logged_in", false),
+            vozCallerId = prefs.getString("voz_caller_id", "") ?: "",
+            vozAccountName = prefs.getString("voz_account_name", "") ?: "",
+            floatingIslandOverlayEnabled = prefs.getBoolean("floating_island_overlay", true)
         )
     }
 
@@ -84,5 +92,25 @@ class UserPreferencesRepository(context: Context) {
 
     fun setConfirmBeforeCall(enabled: Boolean) {
         prefs.edit().putBoolean("confirm_before_call", enabled).apply()
+    }
+
+    fun loginVozAccount(name: String, callerId: String) {
+        prefs.edit()
+            .putBoolean("voz_account_logged_in", true)
+            .putString("voz_account_name", name)
+            .putString("voz_caller_id", callerId)
+            .apply()
+    }
+
+    fun logoutVozAccount() {
+        prefs.edit()
+            .putBoolean("voz_account_logged_in", false)
+            .remove("voz_account_name")
+            .remove("voz_caller_id")
+            .apply()
+    }
+
+    fun setFloatingIslandOverlayEnabled(enabled: Boolean) {
+        prefs.edit().putBoolean("floating_island_overlay", enabled).apply()
     }
 }

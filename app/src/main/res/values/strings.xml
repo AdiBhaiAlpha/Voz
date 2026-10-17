@@ -170,7 +170,7 @@
     <string name="reduce_motion_setting_title">Reduce Motion</string>
     <string name="role_dialer_active">VOZ is your active Default Dialer</string>
     <string name="role_dialer_card_title">Default Phone App Role</string>
-    <string name="role_dialer_inactive">Set VOZ as Default Dialer to enable in-call screen, call waiting, and automatic blocklist screening.</string>
+    <string name="role_dialer_inactive">Android routes incoming call UI exclusively to your Default Phone App. Set VOZ as your Default Phone App to enable full-screen incoming caller ID, Call Waiting, and custom in-call controls.</string>
     <string name="role_dialer_request_btn">Set as Default Dialer</string>
     <string name="role_screening_request_btn">Enable Call Screening Role</string>
     <string name="search_placeholder">Search name, Bangla, or number (T9)…</string>

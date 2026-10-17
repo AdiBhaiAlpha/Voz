@@ -441,6 +441,24 @@ class VozMainViewModel(application: Application) : AndroidViewModel(application)
         preferencesRepository.setConfirmBeforeCall(enabled)
     }
 
+    fun loginVozAccount(userName: String) {
+        val cleanName = userName.trim().ifBlank { "VOZ User" }
+        val randomSuffix = (1000..9999).random()
+        val randomPrefix = (100..999).random()
+        val generatedCallerId = "VOZ-$randomPrefix-$randomSuffix"
+        preferencesRepository.loginVozAccount(cleanName, generatedCallerId)
+        showFeedback("VOZ Caller ID activated: $generatedCallerId")
+    }
+
+    fun logoutVozAccount() {
+        preferencesRepository.logoutVozAccount()
+        showFeedback("Signed out of VOZ Online Calling.")
+    }
+
+    fun setFloatingIslandOverlayEnabled(enabled: Boolean) {
+        preferencesRepository.setFloatingIslandOverlayEnabled(enabled)
+    }
+
     fun dismissFeedbackBanner() {
         _internalState.value = _internalState.value.copy(feedbackMessage = null)
     }

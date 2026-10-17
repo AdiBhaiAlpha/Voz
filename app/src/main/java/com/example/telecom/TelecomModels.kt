@@ -27,7 +27,10 @@ data class VozCallUiModel(
     val isHoldSupported: Boolean = true,
     val assistNote: String? = null,
     val assistLabel: String? = null,
-    val isImportant: Boolean = false
+    val isImportant: Boolean = false,
+    val isRecording: Boolean = false,
+    val recordingError: String? = null,
+    val isVozOnlineCall: Boolean = false
 )
 
 data class VozAudioState(

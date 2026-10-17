@@ -1,19 +1,29 @@
 package com.example.telecom
 
+import android.app.Notification
 import android.app.NotificationChannel
 import android.app.NotificationManager
 import android.app.PendingIntent
 import android.content.Context
 import android.content.Intent
+import android.content.pm.PackageManager
+import android.content.pm.ServiceInfo
+import android.media.AudioAttributes
+import android.media.RingtoneManager
 import android.os.Build
+import android.provider.Settings
 import android.telecom.Call
 import android.telecom.CallAudioState
 import android.telecom.InCallService
+import android.util.Log
 import androidx.core.app.NotificationCompat
 import androidx.core.app.Person
+import androidx.core.app.ServiceCompat
+import androidx.core.content.ContextCompat
 import androidx.room.Room
 import com.example.R
 import com.example.data.local.VozDatabase
+import com.example.data.preferences.UserPreferencesRepository
 import com.example.domain.PhoneNormalizer
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -27,17 +37,23 @@ class VozInCallService : InCallService() {
 
     private val serviceScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
     private var database: VozDatabase? = null
+    private var preferencesRepository: UserPreferencesRepository? = null
 
     companion object {
-        private const val CHANNEL_ID = "voz_calls_channel"
-        private const val NOTIFICATION_ID = 4001
+        private const val TAG = "VozInCallService"
+        const val CHANNEL_INCOMING_ID = "voz_incoming_calls_channel"
+        const val CHANNEL_ONGOING_ID = "voz_ongoing_calls_channel"
+        const val NOTIFICATION_ID = 4001
     }
 
     override fun onCreate() {
         super.onCreate()
+        Log.i(TAG, "VozInCallService created and attached")
         CallManager.attachInCallService(this)
         CallSessionController.attachService(this)
-        ensureNotificationChannel()
+        ensureNotificationChannels()
+
+        preferencesRepository = UserPreferencesRepository(applicationContext)
         database = Room.databaseBuilder(
             applicationContext,
             VozDatabase::class.java,
@@ -47,7 +63,6 @@ class VozInCallService : InCallService() {
 
     override fun onCallAdded(call: Call) {
         super.onCallAdded(call)
-        val callId = UUID.randomUUID().toString()
         val details = call.details
         val rawNumber = details?.handle?.schemeSpecificPart ?: ""
         val normalized = PhoneNormalizer.normalizeForComparison(rawNumber).ifBlank { rawNumber }
@@ -55,11 +70,14 @@ class VozInCallService : InCallService() {
         val callerDisplay = details?.callerDisplayName?.takeIf { it.isNotBlank() }
         val connectTime = details?.connectTimeMillis ?: 0L
 
-        val isIncoming = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
-            details?.callDirection == Call.Details.DIRECTION_INCOMING
-        } else {
-            state == CallLifecycleState.RINGING
-        }
+        // Real incoming call detection from Android Telecom state and direction
+        val isIncoming = (call.state == Call.STATE_RINGING) ||
+                (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q && details?.callDirection == Call.Details.DIRECTION_INCOMING)
+
+        // Canonical ID shared between CallManager and CallSessionController
+        val callId = rawNumber.ifBlank { UUID.randomUUID().toString() }
+
+        TelecomDiagnosticLogger.logCallAdded(call, isIncoming)
 
         val initialModel = VozCallUiModel(
             callId = callId,
@@ -72,7 +90,8 @@ class VozInCallService : InCallService() {
             isIncoming = isIncoming
         )
 
-        CallManager.onCallAdded(call, callerDisplay, null)
+        // Register with canonical callId
+        CallManager.onCallAdded(call, callerDisplay, null, callId)
         CallSessionController.registerCall(call, initialModel)
 
         // Enrich with local metadata in background
@@ -87,27 +106,64 @@ class VozInCallService : InCallService() {
                     assistLabel = assist?.customLabel,
                     isImportant = assist?.isImportant ?: false
                 )
-            } catch (_: Exception) {}
+            } catch (e: Exception) {
+                Log.w(TAG, "Error enriching caller metadata", e)
+            }
         }
 
         val callerTitle = callerDisplay ?: PhoneNormalizer.formatForDisplay(rawNumber).ifBlank { "Unknown Caller" }
-        showCallNotification(callId, callerTitle, state == CallLifecycleState.RINGING)
+        updateCallNotification(callId, callerTitle, isIncoming, isRinging = (call.state == Call.STATE_RINGING))
 
-        // Launch in-call UI activity
+        // Listen for call state transitions on this call
+        call.registerCallback(object : Call.Callback() {
+            override fun onStateChanged(targetCall: Call, newState: Int) {
+                val isRingingNow = (newState == Call.STATE_RINGING)
+                val isIncomingNow = (newState == Call.STATE_RINGING) ||
+                        (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q && targetCall.details?.callDirection == Call.Details.DIRECTION_INCOMING) ||
+                        isIncoming
+                updateCallNotification(callId, callerTitle, isIncomingNow, isRinging = isRingingNow)
+
+                // When call transitions to active, ensure overlay is running if enabled
+                if (newState == Call.STATE_ACTIVE) {
+                    checkAndLaunchOverlay()
+                }
+            }
+
+            override fun onDetailsChanged(targetCall: Call, newDetails: Call.Details) {
+                val updatedDisplay = newDetails.callerDisplayName?.takeIf { it.isNotBlank() } ?: callerTitle
+                val isRingingNow = (targetCall.state == Call.STATE_RINGING)
+                val isIncomingNow = (targetCall.state == Call.STATE_RINGING) ||
+                        (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q && newDetails.callDirection == Call.Details.DIRECTION_INCOMING) ||
+                        isIncoming
+                updateCallNotification(callId, updatedDisplay, isIncomingNow, isRinging = isRingingNow)
+            }
+        })
+
+        // Check if floating overlay is permitted and enabled (compact banner over other apps)
+        checkAndLaunchOverlay()
+
+        // Launch full-screen in-call UI activity (granted when device is locked or as allowed by policy)
         val intent = Intent(this, InCallActivity::class.java).apply {
             addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_SINGLE_TOP)
         }
         try {
             startActivity(intent)
-        } catch (_: Exception) {}
+        } catch (e: Exception) {
+            // Android 10+ background activity start may be restricted while device is unlocked;
+            // High-priority notification with CallStyle and fullScreenIntent provides the heads-up banner.
+            Log.i(TAG, "Direct background startActivity bypassed by Android policy; fullScreenIntent will handle UI")
+        }
     }
 
     override fun onCallRemoved(call: Call) {
         super.onCallRemoved(call)
+        TelecomDiagnosticLogger.logCallRemoved(call.toString(), CallSessionController.mapSystemState(call).name)
         CallManager.onCallRemoved(call)
         CallSessionController.unregisterCall(call)
+
         if (CallSessionController.activeCalls.value.isEmpty()) {
             cancelCallNotification()
+            VozCallOverlayService.stop(this)
         }
     }
 
@@ -121,27 +177,64 @@ class VozInCallService : InCallService() {
         CallManager.detachInCallService(this)
         CallSessionController.detachService(this)
         cancelCallNotification()
+        VozCallOverlayService.stop(this)
         serviceScope.cancel()
         super.onDestroy()
     }
 
-    private fun ensureNotificationChannel() {
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-            val nm = getSystemService(Context.NOTIFICATION_SERVICE) as? NotificationManager ?: return
-            val channel = NotificationChannel(
-                CHANNEL_ID,
-                "VOZ Active & Incoming Calls",
-                NotificationManager.IMPORTANCE_HIGH
-            ).apply {
-                description = "Displays incoming and ongoing telephone calls"
-                setSound(null, null) // Avoid double ring when system dialer manages ringtone
-            }
-            nm.createNotificationChannel(channel)
+    private fun checkAndLaunchOverlay() {
+        val prefs = preferencesRepository?.loadPreferences()
+        if (prefs?.floatingIslandOverlayEnabled == true && Settings.canDrawOverlays(this)) {
+            VozCallOverlayService.startIfPermitted(this)
         }
     }
 
-    private fun showCallNotification(callId: String, callerTitle: String, isIncoming: Boolean) {
-        val nm = getSystemService(Context.NOTIFICATION_SERVICE) as? NotificationManager ?: return
+    private fun ensureNotificationChannels() {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            val nm = getSystemService(Context.NOTIFICATION_SERVICE) as? NotificationManager ?: return
+
+            // 1. High-priority incoming call channel with ringtone and vibration
+            val ringtoneUri = RingtoneManager.getDefaultUri(RingtoneManager.TYPE_RINGTONE)
+            val audioAttributes = AudioAttributes.Builder()
+                .setContentType(AudioAttributes.CONTENT_TYPE_SONIFICATION)
+                .setUsage(AudioAttributes.USAGE_NOTIFICATION_RINGTONE)
+                .build()
+
+            val incomingChannel = NotificationChannel(
+                CHANNEL_INCOMING_ID,
+                "VOZ Incoming Calls",
+                NotificationManager.IMPORTANCE_HIGH
+            ).apply {
+                description = "Alerts for incoming phone calls with ringtone and heads-up banner"
+                setSound(ringtoneUri, audioAttributes)
+                enableVibration(true)
+                vibrationPattern = longArrayOf(0, 800, 1000)
+                lockscreenVisibility = Notification.VISIBILITY_PUBLIC
+                setBypassDnd(true)
+            }
+            nm.createNotificationChannel(incomingChannel)
+
+            // 2. Ongoing call channel (low importance, silent while user is on call)
+            val ongoingChannel = NotificationChannel(
+                CHANNEL_ONGOING_ID,
+                "VOZ Ongoing Calls",
+                NotificationManager.IMPORTANCE_LOW
+            ).apply {
+                description = "Shows status of connected ongoing calls"
+                setSound(null, null)
+                lockscreenVisibility = Notification.VISIBILITY_PUBLIC
+            }
+            nm.createNotificationChannel(ongoingChannel)
+        }
+    }
+
+    private fun updateCallNotification(
+        callId: String,
+        callerTitle: String,
+        isIncoming: Boolean,
+        isRinging: Boolean
+    ) {
+        val channelId = if (isRinging) CHANNEL_INCOMING_ID else CHANNEL_ONGOING_ID
 
         val fullScreenIntent = Intent(this, InCallActivity::class.java).apply {
             flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_SINGLE_TOP
@@ -180,31 +273,79 @@ class VozInCallService : InCallService() {
             .setImportant(true)
             .build()
 
-        val style = if (isIncoming) {
-            NotificationCompat.CallStyle.forIncomingCall(callerPerson, declinePending, answerPending)
-        } else {
-            NotificationCompat.CallStyle.forOngoingCall(callerPerson, declinePending)
-        }
-
-        val notification = NotificationCompat.Builder(this, CHANNEL_ID)
-            .setSmallIcon(android.R.drawable.sym_action_call)
+        val builder = NotificationCompat.Builder(this, channelId)
+            .setSmallIcon(R.drawable.ic_call_answer)
             .setContentTitle(callerTitle)
-            .setContentText(getString(if (isIncoming) R.string.incoming_call_label else R.string.ongoing_call_label))
-            .setPriority(NotificationCompat.PRIORITY_MAX)
+            .setContentText(
+                if (isRinging) getString(R.string.incoming_call_label)
+                else getString(R.string.ongoing_call_label)
+            )
+            .setPriority(if (isRinging) NotificationCompat.PRIORITY_MAX else NotificationCompat.PRIORITY_LOW)
             .setCategory(NotificationCompat.CATEGORY_CALL)
             .setOngoing(true)
-            .setFullScreenIntent(fullScreenPending, true)
             .setContentIntent(fullScreenPending)
-            .setStyle(style)
-            .build()
+
+        if (isRinging) {
+            // Heads-up notification trigger when user is inside other apps or device is locked
+            builder.setFullScreenIntent(fullScreenPending, true)
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+                // CallStyle handles the Answer and Decline action buttons natively
+                builder.setStyle(
+                    NotificationCompat.CallStyle.forIncomingCall(callerPerson, declinePending, answerPending)
+                )
+            } else {
+                builder.addAction(
+                    R.drawable.ic_call_decline,
+                    getString(R.string.action_decline),
+                    declinePending
+                )
+                builder.addAction(
+                    R.drawable.ic_call_answer,
+                    getString(R.string.action_answer),
+                    answerPending
+                )
+            }
+        } else {
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+                builder.setStyle(
+                    NotificationCompat.CallStyle.forOngoingCall(callerPerson, declinePending)
+                )
+            } else {
+                builder.addAction(
+                    R.drawable.ic_call_decline,
+                    getString(R.string.action_hangup),
+                    declinePending
+                )
+            }
+        }
+
+        val notification = builder.build()
 
         try {
-            nm.notify(NOTIFICATION_ID, notification)
-        } catch (_: Exception) {}
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+                ServiceCompat.startForeground(
+                    this,
+                    NOTIFICATION_ID,
+                    notification,
+                    ServiceInfo.FOREGROUND_SERVICE_TYPE_PHONE_CALL
+                )
+            } else {
+                startForeground(NOTIFICATION_ID, notification)
+            }
+            Log.i(TAG, "Call notification promoted to foreground: isRinging=$isRinging, channel=$channelId")
+        } catch (e: Exception) {
+            Log.e(TAG, "Failed to startForeground on notification", e)
+            val nm = getSystemService(Context.NOTIFICATION_SERVICE) as? NotificationManager
+            nm?.notify(NOTIFICATION_ID, notification)
+        }
     }
 
     private fun cancelCallNotification() {
+        try {
+            stopForeground(STOP_FOREGROUND_REMOVE)
+        } catch (_: Exception) {}
         val nm = getSystemService(Context.NOTIFICATION_SERVICE) as? NotificationManager ?: return
         nm.cancel(NOTIFICATION_ID)
+        Log.i(TAG, "Call notification cancelled")
     }
 }

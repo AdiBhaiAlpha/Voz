@@ -24,6 +24,7 @@
     <uses-permission android:name="android.permission.USE_FULL_SCREEN_INTENT" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_PHONE_CALL" />
+    <uses-permission android:name="android.permission.SYSTEM_ALERT_WINDOW" />
 
     <application
         android:allowBackup="true"
@@ -117,6 +118,11 @@
         <!-- Notification action receiver for incoming/ongoing calls -->
         <receiver
             android:name=".telecom.CallActionReceiver"
+            android:exported="false" />
+
+        <!-- Dynamic Island floating window overlay service -->
+        <service
+            android:name=".telecom.VozCallOverlayService"
             android:exported="false" />
     </application>
 

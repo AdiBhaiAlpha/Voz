@@ -1,5 +1,11 @@
 package com.example.ui.screens
 
+import android.content.ClipData
+import android.content.ClipboardManager
+import android.content.Context
+import android.content.Intent
+import android.net.Uri
+import android.provider.Settings
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -12,15 +18,20 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.background
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.ui.unit.sp
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Alarm
 import androidx.compose.material.icons.filled.Block
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.CheckCircle
+import androidx.compose.material.icons.filled.Cloud
+import androidx.compose.material.icons.filled.ContentCopy
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Info
+import androidx.compose.material.icons.filled.Layers
 import androidx.compose.material.icons.filled.Phone
 import androidx.compose.material.icons.filled.Security
 import androidx.compose.material.icons.filled.Settings
@@ -46,8 +57,10 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.example.R
@@ -71,9 +84,14 @@ fun ToolsScreen(
     onUnblockNumber: (normalizedNumber: String) -> Unit,
     onCompleteReminder: (Long) -> Unit,
     onDeleteReminder: (Long) -> Unit,
+    onLoginVozAccount: (String) -> Unit,
+    onLogoutVozAccount: () -> Unit,
+    onToggleFloatingOverlay: (Boolean) -> Unit,
     modifier: Modifier = Modifier
 ) {
     var showAddBlockDialog by remember { mutableStateOf(false) }
+    var inputVozName by remember { mutableStateOf("") }
+    val context = LocalContext.current
 
     LazyColumn(
         modifier = modifier
@@ -129,6 +147,207 @@ fun ToolsScreen(
                             modifier = Modifier.testTag("set_default_dialer_btn")
                         ) {
                             Text(stringResource(R.string.role_dialer_request_btn))
+                        }
+                    }
+                }
+            }
+        }
+
+        // VOZ Free Online Calling & Caller ID Card
+        item {
+            Card(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .testTag("voz_online_calling_card"),
+                colors = CardDefaults.cardColors(
+                    containerColor = if (uiState.preferences.isVozAccountLoggedIn) Color(0xFF0F1E16) else MaterialTheme.colorScheme.surfaceVariant
+                ),
+                shape = RoundedCornerShape(16.dp)
+            ) {
+                Column(modifier = Modifier.padding(16.dp)) {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.SpaceBetween
+                    ) {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Icon(
+                                imageVector = Icons.Default.Cloud,
+                                contentDescription = null,
+                                tint = if (uiState.preferences.isVozAccountLoggedIn) Color(0xFFA3E635) else MaterialTheme.colorScheme.primary
+                            )
+                            Spacer(modifier = Modifier.width(8.dp))
+                            Text(
+                                text = "VOZ Free Online Calling & Caller ID",
+                                style = MaterialTheme.typography.titleMedium,
+                                fontWeight = FontWeight.Bold,
+                                color = if (uiState.preferences.isVozAccountLoggedIn) Color.White else MaterialTheme.colorScheme.onSurface
+                            )
+                        }
+                    }
+
+                    Spacer(modifier = Modifier.height(6.dp))
+
+                    if (uiState.preferences.isVozAccountLoggedIn) {
+                        Text(
+                            text = "Connected as ${uiState.preferences.vozAccountName}. You can place and receive free online HD voice calls with any VOZ user.",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = Color.White.copy(alpha = 0.8f)
+                        )
+
+                        Spacer(modifier = Modifier.height(10.dp))
+
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .background(Color(0xFF0A120D), RoundedCornerShape(10.dp))
+                                .padding(horizontal = 12.dp, vertical = 8.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.SpaceBetween
+                        ) {
+                            Column {
+                                Text(
+                                    text = "Your VOZ Caller ID",
+                                    fontSize = 11.sp,
+                                    color = Color(0xFFA3E635)
+                                )
+                                Text(
+                                    text = uiState.preferences.vozCallerId,
+                                    fontSize = 15.sp,
+                                    fontFamily = FontFamily.Monospace,
+                                    fontWeight = FontWeight.Bold,
+                                    color = Color.White
+                                )
+                            }
+                            IconButton(onClick = {
+                                val cm = context.getSystemService(Context.CLIPBOARD_SERVICE) as? ClipboardManager
+                                val clip = ClipData.newPlainText("VOZ Caller ID", uiState.preferences.vozCallerId)
+                                cm?.setPrimaryClip(clip)
+                            }) {
+                                Icon(
+                                    imageVector = Icons.Default.ContentCopy,
+                                    contentDescription = "Copy VOZ Caller ID",
+                                    tint = Color(0xFFA3E635)
+                                )
+                            }
+                        }
+
+                        Spacer(modifier = Modifier.height(10.dp))
+
+                        OutlinedButton(
+                            onClick = onLogoutVozAccount,
+                            modifier = Modifier.fillMaxWidth()
+                        ) {
+                            Text("Sign Out / Reset Caller ID")
+                        }
+                    } else {
+                        Text(
+                            text = "Activate your VOZ Caller ID to enable free VOZ-to-VOZ HD calling over Wi-Fi and mobile data.",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+
+                        Spacer(modifier = Modifier.height(10.dp))
+
+                        OutlinedTextField(
+                            value = inputVozName,
+                            onValueChange = { inputVozName = it },
+                            label = { Text("Your Display Name") },
+                            placeholder = { Text("e.g., Alex / Rahim") },
+                            modifier = Modifier.fillMaxWidth(),
+                            singleLine = true
+                        )
+
+                        Spacer(modifier = Modifier.height(10.dp))
+
+                        Button(
+                            onClick = {
+                                onLoginVozAccount(inputVozName)
+                                inputVozName = ""
+                            },
+                            colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFA3E635)),
+                            modifier = Modifier.fillMaxWidth()
+                        ) {
+                            Text("Activate Free VOZ Caller ID", color = Color.Black, fontWeight = FontWeight.Bold)
+                        }
+                    }
+                }
+            }
+        }
+
+        // Dynamic Island Overlay (Over Other Apps) Card
+        item {
+            val hasOverlayPermission = Settings.canDrawOverlays(context)
+            Card(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .testTag("overlay_permission_card"),
+                colors = CardDefaults.cardColors(
+                    containerColor = if (hasOverlayPermission && uiState.preferences.floatingIslandOverlayEnabled)
+                        Color(0xFF0F1E16) else MaterialTheme.colorScheme.surfaceVariant
+                ),
+                shape = RoundedCornerShape(16.dp)
+            ) {
+                Column(modifier = Modifier.padding(16.dp)) {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.SpaceBetween
+                    ) {
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            modifier = Modifier.weight(1f)
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.Layers,
+                                contentDescription = null,
+                                tint = if (hasOverlayPermission) Color(0xFFA3E635) else MaterialTheme.colorScheme.primary
+                            )
+                            Spacer(modifier = Modifier.width(8.dp))
+                            Text(
+                                text = "Dynamic Island (Over Other Apps)",
+                                style = MaterialTheme.typography.titleMedium,
+                                fontWeight = FontWeight.Bold,
+                                color = if (hasOverlayPermission) Color.White else MaterialTheme.colorScheme.onSurface
+                            )
+                        }
+                        if (hasOverlayPermission) {
+                            Switch(
+                                checked = uiState.preferences.floatingIslandOverlayEnabled,
+                                onCheckedChange = onToggleFloatingOverlay
+                            )
+                        }
+                    }
+
+                    Spacer(modifier = Modifier.height(6.dp))
+
+                    Text(
+                        text = if (hasOverlayPermission) {
+                            "Enabled: The Dynamic Island floating pill appears at the top of the screen during incoming and active calls while you are inside any other app."
+                        } else {
+                            "Grant 'Display over other apps' to show the sleek Dynamic Island pill at the top of the screen when receiving calls outside VOZ."
+                        },
+                        style = MaterialTheme.typography.bodySmall,
+                        color = if (hasOverlayPermission) Color.White.copy(alpha = 0.8f) else MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+
+                    if (!hasOverlayPermission) {
+                        Spacer(modifier = Modifier.height(12.dp))
+                        Button(
+                            onClick = {
+                                val intent = Intent(
+                                    Settings.ACTION_MANAGE_OVERLAY_PERMISSION,
+                                    Uri.parse("package:${context.packageName}")
+                                ).apply {
+                                    flags = Intent.FLAG_ACTIVITY_NEW_TASK
+                                }
+                                try {
+                                    context.startActivity(intent)
+                                } catch (_: Exception) {}
+                            },
+                            colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFA3E635))
+                        ) {
+                            Text("Enable Dynamic Island in Android Settings", color = Color.Black, fontWeight = FontWeight.Bold)
                         }
                     }
                 }

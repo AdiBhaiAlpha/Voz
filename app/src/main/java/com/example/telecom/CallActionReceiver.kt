@@ -4,6 +4,8 @@ import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
 
+import android.util.Log
+
 class CallActionReceiver : BroadcastReceiver() {
 
     companion object {
@@ -13,16 +15,37 @@ class CallActionReceiver : BroadcastReceiver() {
     }
 
     override fun onReceive(context: Context, intent: Intent) {
-        val callId = intent.getStringExtra(EXTRA_CALL_ID) ?: return
+        val callId = intent.getStringExtra(EXTRA_CALL_ID)
+        val targetCallId = if (!callId.isNullOrBlank()) {
+            callId
+        } else {
+            CallSessionController.activeCalls.value.firstOrNull()?.callId
+        }
 
         when (intent.action) {
             ACTION_ANSWER -> {
-                CallManager.answerCall()
-                CallSessionController.answerCall(callId)
+                if (targetCallId != null) {
+                    CallSessionController.answerCall(targetCallId)
+                } else {
+                    CallManager.answerCall()
+                }
+
+                // Bring up the in-call UI for the answered call
+                val inCallIntent = Intent(context, InCallActivity::class.java).apply {
+                    flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_SINGLE_TOP
+                }
+                try {
+                    context.startActivity(inCallIntent)
+                } catch (e: Exception) {
+                    Log.w("CallActionReceiver", "Failed to launch in-call activity from answer action", e)
+                }
             }
             ACTION_DECLINE_OR_HANGUP -> {
-                CallManager.declineOrHangup()
-                CallSessionController.declineOrHangupCall(callId)
+                if (targetCallId != null) {
+                    CallSessionController.declineOrHangupCall(targetCallId)
+                } else {
+                    CallManager.declineOrHangup()
+                }
             }
         }
     }

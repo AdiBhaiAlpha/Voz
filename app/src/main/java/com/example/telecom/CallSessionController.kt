@@ -65,6 +65,9 @@ object CallSessionController {
             } catch (_: Exception) {}
         }
         _activeCalls.value = _activeCalls.value.filter { it.callId != id }
+        if (_activeCalls.value.isEmpty() && CallAudioRecorder.isRecording.value) {
+            CallAudioRecorder.stopRecording()
+        }
     }
 
     fun updateEnrichedMetadata(
@@ -161,6 +164,30 @@ object CallSessionController {
             CallAudioState.ROUTE_SPEAKER
         }
         service.setAudioRoute(newRoute)
+    }
+
+    fun toggleRecord(context: android.content.Context, callId: String) {
+        if (!allowAction()) return
+        val currentCall = _activeCalls.value.firstOrNull { it.callId == callId } ?: return
+        if (currentCall.isRecording) {
+            CallAudioRecorder.stopRecording()
+            _activeCalls.value = _activeCalls.value.map {
+                if (it.callId == callId) it.copy(isRecording = false, recordingError = null) else it
+            }
+        } else {
+            val started = CallAudioRecorder.startRecording(context, callId)
+            val err = if (!started) CallAudioRecorder.lastError.value else null
+            _activeCalls.value = _activeCalls.value.map {
+                if (it.callId == callId) it.copy(isRecording = started, recordingError = err) else it
+            }
+        }
+    }
+
+    fun clearRecordingError(callId: String) {
+        CallAudioRecorder.clearError()
+        _activeCalls.value = _activeCalls.value.map {
+            if (it.callId == callId) it.copy(recordingError = null) else it
+        }
     }
 
     fun toggleHold(callId: String) {

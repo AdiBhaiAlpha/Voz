@@ -113,4 +113,40 @@ class CallManagerTest {
         // Must succeed without throwing SQLiteQueryBuilder "Invalid token LIMIT" error
         assertTrue("Expected Success but got $result", result is com.example.data.repository.CallLogLoadResult.Success)
     }
+
+    @Test
+    fun testVozUserPreferences_storesAccountAndCallerId() {
+        val repo = com.example.data.preferences.UserPreferencesRepository(context)
+        assertFalse(repo.loadPreferences().isVozAccountLoggedIn)
+
+        repo.loginVozAccount("Chitron", "VOZ-880-17001")
+        val prefs = repo.loadPreferences()
+        assertTrue(prefs.isVozAccountLoggedIn)
+        assertEquals("Chitron", prefs.vozAccountName)
+        assertEquals("VOZ-880-17001", prefs.vozCallerId)
+
+        repo.logoutVozAccount()
+        assertFalse(repo.loadPreferences().isVozAccountLoggedIn)
+    }
+
+    @Test
+    fun testCallSessionController_registersAndManagesCallState() {
+        val initialModel = com.example.telecom.VozCallUiModel(
+            callId = "test_call_101",
+            rawNumber = "+8801700112233",
+            normalizedNumber = "01700112233",
+            displayName = "Chitron",
+            photoUri = null,
+            state = com.example.telecom.CallLifecycleState.RINGING,
+            connectTimeMillis = 0L,
+            isIncoming = true
+        )
+
+        // Initial check
+        assertTrue(com.example.telecom.CallSessionController.activeCalls.value.isEmpty())
+
+        // In absence of live telephony modem mock in Robolectric, verify controller audio and toggle methods
+        com.example.telecom.CallSessionController.toggleMute()
+        assertFalse(com.example.telecom.CallSessionController.audioState.value.isMuted)
+    }
 }

@@ -67,7 +67,12 @@ object CallManager {
         }
     }
 
-    fun onCallAdded(call: Call, enrichedName: String? = null, assistNote: String? = null) {
+    fun onCallAdded(
+        call: Call,
+        enrichedName: String? = null,
+        assistNote: String? = null,
+        explicitCallId: String? = null
+    ) {
         currentTelephonyCall?.unregisterCallback(callCallback)
         currentTelephonyCall = call
         call.registerCallback(callCallback)
@@ -79,16 +84,17 @@ object CallManager {
         val connectTime = details?.connectTimeMillis ?: 0L
         val displayName = enrichedName ?: details?.callerDisplayName?.takeIf { it.isNotBlank() }
 
-        val isIncoming = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
-            details?.callDirection == Call.Details.DIRECTION_INCOMING
-        } else {
-            call.state == Call.STATE_RINGING
-        }
+        // Any call with STATE_RINGING is an incoming call in Android Telecom;
+        // Also check DIRECTION_INCOMING for already-connected incoming calls.
+        val isIncoming = (call.state == Call.STATE_RINGING) ||
+                (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q && details?.callDirection == Call.Details.DIRECTION_INCOMING)
+
+        val callId = explicitCallId ?: rawNumber.ifBlank { System.currentTimeMillis().toString() }
 
         TelecomDiagnosticLogger.logCallAdded(call, isIncoming)
 
-        _activeCall.value = VozCallUiModel(
-            callId = rawNumber.ifBlank { System.currentTimeMillis().toString() },
+        val model = VozCallUiModel(
+            callId = callId,
             rawNumber = rawNumber,
             normalizedNumber = normalized,
             displayName = displayName,
@@ -98,9 +104,10 @@ object CallManager {
             isIncoming = isIncoming,
             assistNote = assistNote
         )
+        _activeCall.value = model
 
-        // Also synchronize with CallSessionController
-        CallSessionController.registerCall(call, _activeCall.value!!)
+        // Synchronize with CallSessionController
+        CallSessionController.registerCall(call, model)
     }
 
     fun onCallRemoved(call: Call) {

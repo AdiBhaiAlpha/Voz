@@ -45,6 +45,8 @@ import androidx.compose.material.icons.filled.Call
 import androidx.compose.material.icons.filled.CallEnd
 import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.Dialpad
+import androidx.compose.material.icons.filled.FiberManualRecord
+import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Mic
 import androidx.compose.material.icons.filled.MicOff
 import androidx.compose.material.icons.filled.Pause
@@ -116,6 +118,11 @@ class InCallActivity : ComponentActivity() {
             VozCallerRoot(onDismiss = { finish() })
         }
     }
+
+    override fun onNewIntent(intent: android.content.Intent) {
+        super.onNewIntent(intent)
+        setIntent(intent)
+    }
 }
 
 // Brand palette: Obsidian Black & Electric Neon Lime
@@ -130,10 +137,13 @@ private val VozCrimsonDark = Color(0xFFDC2626)
 
 @Composable
 fun VozCallerRoot(onDismiss: () -> Unit) {
+    val context = LocalContext.current
     val activeCalls by CallSessionController.activeCalls.collectAsStateWithLifecycle()
     val audioState by CallSessionController.audioState.collectAsStateWithLifecycle()
 
-    val currentCall = activeCalls.firstOrNull()
+    // Prioritize ringing incoming call (crucial for incoming calls and Call Waiting)
+    val ringingCall = activeCalls.firstOrNull { it.state == CallLifecycleState.RINGING }
+    val currentCall = ringingCall ?: activeCalls.firstOrNull()
 
     // Dismiss activity when all calls have ended
     LaunchedEffect(activeCalls) {
@@ -151,10 +161,11 @@ fun VozCallerRoot(onDismiss: () -> Unit) {
             VozCallEndedScreen(durationSeconds = 0L)
         } else {
             when {
-                // Incoming Call Screen
-                currentCall.isIncoming && currentCall.state == CallLifecycleState.RINGING -> {
+                // Incoming Call Screen (or Call Waiting)
+                (currentCall.isIncoming || currentCall.state == CallLifecycleState.RINGING) && currentCall.state == CallLifecycleState.RINGING -> {
                     VozIncomingCallScreen(
                         call = currentCall,
+                        isCallWaiting = activeCalls.size > 1,
                         onAnswer = { CallSessionController.answerCall(currentCall.callId) },
                         onDecline = { CallSessionController.declineOrHangupCall(currentCall.callId) }
                     )
@@ -178,6 +189,7 @@ fun VozCallerRoot(onDismiss: () -> Unit) {
                         onToggleMute = { CallSessionController.toggleMute() },
                         onToggleSpeaker = { CallSessionController.toggleSpeaker() },
                         onToggleHold = { CallSessionController.toggleHold(currentCall.callId) },
+                        onToggleRecord = { CallSessionController.toggleRecord(context, currentCall.callId) },
                         onPlayDtmf = { digit -> CallSessionController.playDtmf(currentCall.callId, digit) },
                         onStopDtmf = { CallSessionController.stopDtmf(currentCall.callId) },
                         onBack = onDismiss
@@ -185,7 +197,11 @@ fun VozCallerRoot(onDismiss: () -> Unit) {
                 }
                 // Disconnecting or Disconnected
                 else -> {
-                    VozCallEndedScreen(durationSeconds = currentCall.durationSeconds)
+                    val isMissed = currentCall.isIncoming && currentCall.durationSeconds == 0L
+                    VozCallEndedScreen(
+                        durationSeconds = currentCall.durationSeconds,
+                        isMissed = isMissed
+                    )
                 }
             }
         }
@@ -198,6 +214,7 @@ fun VozCallerRoot(onDismiss: () -> Unit) {
 @Composable
 fun VozIncomingCallScreen(
     call: VozCallUiModel,
+    isCallWaiting: Boolean = false,
     onAnswer: () -> Unit,
     onDecline: () -> Unit
 ) {
@@ -256,14 +273,19 @@ fun VozIncomingCallScreen(
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.SpaceBetween
     ) {
-        // Top VOZ Branding Badge
+        // Top VOZ Branding Badge / Call Waiting Alert
         Row(
             modifier = Modifier.fillMaxWidth(),
             horizontalArrangement = Arrangement.Center
         ) {
             Card(
-                colors = CardDefaults.cardColors(containerColor = VozCardSurface),
-                border = androidx.compose.foundation.BorderStroke(1.dp, VozLimeGreen.copy(alpha = 0.4f)),
+                colors = CardDefaults.cardColors(
+                    containerColor = if (isCallWaiting) Color(0xFF332005) else VozCardSurface
+                ),
+                border = androidx.compose.foundation.BorderStroke(
+                    1.dp,
+                    if (isCallWaiting) Color(0xFFF59E0B) else VozLimeGreen.copy(alpha = 0.4f)
+                ),
                 shape = RoundedCornerShape(20.dp)
             ) {
                 Row(
@@ -271,17 +293,17 @@ fun VozIncomingCallScreen(
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     Icon(
-                        imageVector = Icons.Default.Shield,
+                        imageVector = if (isCallWaiting) Icons.Default.Pause else Icons.Default.Shield,
                         contentDescription = null,
-                        tint = VozLimeGreen,
+                        tint = if (isCallWaiting) Color(0xFFF59E0B) else VozLimeGreen,
                         modifier = Modifier.size(16.dp)
                     )
                     Spacer(modifier = Modifier.width(8.dp))
                     Text(
-                        text = "VOZ CALL PROTECTION",
+                        text = if (isCallWaiting) "CALL WAITING • CURRENT CALL WILL HOLD" else "VOZ CALL PROTECTION",
                         style = MaterialTheme.typography.labelMedium,
                         fontWeight = FontWeight.Bold,
-                        color = VozLimeGreen,
+                        color = if (isCallWaiting) Color(0xFFF59E0B) else VozLimeGreen,
                         letterSpacing = 1.2.sp
                     )
                 }
@@ -678,6 +700,7 @@ fun VozActiveCallScreen(
     onToggleMute: () -> Unit,
     onToggleSpeaker: () -> Unit,
     onToggleHold: () -> Unit,
+    onToggleRecord: () -> Unit,
     onPlayDtmf: (Char) -> Unit,
     onStopDtmf: () -> Unit,
     onBack: () -> Unit
@@ -940,6 +963,15 @@ fun VozActiveCallScreen(
                     testTag = "active_keypad_button"
                 )
 
+                VozCallRoundToggle(
+                    icon = Icons.Filled.FiberManualRecord,
+                    label = if (call.isRecording) "Rec..." else "Record",
+                    isActive = call.isRecording,
+                    activeColor = VozCrimsonEnd,
+                    onClick = onToggleRecord,
+                    testTag = "active_record_button"
+                )
+
                 if (call.isHoldSupported) {
                     VozCallRoundToggle(
                         icon = if (call.isOnHold) Icons.Filled.PlayArrow else Icons.Filled.Pause,
@@ -983,7 +1015,10 @@ fun VozActiveCallScreen(
  * 4. Call Disconnected / Ended Screen
  */
 @Composable
-fun VozCallEndedScreen(durationSeconds: Long) {
+fun VozCallEndedScreen(
+    durationSeconds: Long,
+    isMissed: Boolean = false
+) {
     Box(
         modifier = Modifier
             .fillMaxSize()
@@ -996,22 +1031,27 @@ fun VozCallEndedScreen(durationSeconds: Long) {
                     .size(72.dp)
                     .clip(CircleShape)
                     .background(VozCardSurface)
-                    .border(1.dp, VozCrimsonEnd.copy(alpha = 0.5f), CircleShape),
+                    .border(
+                        1.dp,
+                        if (isMissed) Color(0xFFF59E0B) else VozCrimsonEnd.copy(alpha = 0.5f),
+                        CircleShape
+                    ),
                 contentAlignment = Alignment.Center
             ) {
                 Icon(
-                    imageVector = Icons.Filled.CallEnd,
+                    imageVector = if (isMissed) Icons.Filled.Call else Icons.Filled.CallEnd,
                     contentDescription = null,
-                    tint = VozCrimsonEnd,
+                    tint = if (isMissed) Color(0xFFF59E0B) else VozCrimsonEnd,
                     modifier = Modifier.size(32.dp)
                 )
             }
             Spacer(modifier = Modifier.height(16.dp))
             Text(
-                text = stringResource(R.string.call_state_disconnected),
+                text = if (isMissed) stringResource(R.string.call_type_missed)
+                else stringResource(R.string.call_state_disconnected),
                 style = MaterialTheme.typography.headlineMedium,
                 fontWeight = FontWeight.Bold,
-                color = Color.White
+                color = if (isMissed) Color(0xFFFBBF24) else Color.White
             )
             if (durationSeconds > 0) {
                 Spacer(modifier = Modifier.height(6.dp))
@@ -1034,6 +1074,7 @@ private fun VozCallRoundToggle(
     label: String,
     isActive: Boolean,
     testTag: String,
+    activeColor: Color = VozLimeGreen,
     onClick: () -> Unit
 ) {
     Column(
@@ -1047,7 +1088,7 @@ private fun VozCallRoundToggle(
                 .testTag(testTag),
             shape = CircleShape,
             colors = IconButtonDefaults.filledIconButtonColors(
-                containerColor = if (isActive) VozLimeGreen else VozCardSurface,
+                containerColor = if (isActive) activeColor else VozCardSurface,
                 contentColor = if (isActive) Color.Black else Color.White
             )
         ) {

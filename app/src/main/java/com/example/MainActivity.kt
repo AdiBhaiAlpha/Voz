@@ -37,6 +37,16 @@ import com.example.ui.components.CallRecordDetailBottomSheet
 import com.example.ui.components.ConfirmBeforeCallDialog
 import com.example.ui.components.ContactDetailBottomSheet
 import com.example.ui.components.SimSelectionDialog
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.statusBarsPadding
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.zIndex
+import android.util.Log
+import com.example.telecom.CallLifecycleState
+import com.example.telecom.CallSessionController
+import com.example.telecom.InCallActivity
+import com.example.ui.components.DynamicIslandCallPill
 import com.example.ui.screens.ActivityScreen
 import com.example.ui.screens.ContactsScreen
 import com.example.ui.screens.HomeScreen
@@ -94,7 +104,25 @@ fun VozAppRoot(
     viewModel: VozMainViewModel
 ) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
+    val activeCalls by CallSessionController.activeCalls.collectAsStateWithLifecycle()
+    val ringingCall = activeCalls.firstOrNull { it.state == CallLifecycleState.RINGING }
+    val activeCall = ringingCall ?: activeCalls.firstOrNull()
     val snackbarHostState = remember { SnackbarHostState() }
+    val context = LocalContext.current
+
+    // When a real incoming call arrives while VOZ is in the foreground, immediately display the full-screen UI
+    LaunchedEffect(ringingCall?.callId) {
+        if (ringingCall != null) {
+            val intent = Intent(context, InCallActivity::class.java).apply {
+                flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_SINGLE_TOP
+            }
+            try {
+                context.startActivity(intent)
+            } catch (e: Exception) {
+                Log.w("MainActivity", "Failed to launch InCallActivity from foreground", e)
+            }
+        }
+    }
 
     // Launcher for RoleManager.ROLE_DIALER
     val dialerRoleLauncher = rememberLauncherForActivityResult(
@@ -273,8 +301,34 @@ fun VozAppRoot(
                     onBlockNumber = { num, reason -> viewModel.blockNumber(num, reason) },
                     onUnblockNumber = { viewModel.unblockNumber(it) },
                     onCompleteReminder = { viewModel.completeReminder(it) },
-                    onDeleteReminder = { viewModel.deleteReminder(it) }
+                    onDeleteReminder = { viewModel.deleteReminder(it) },
+                    onLoginVozAccount = { viewModel.loginVozAccount(it) },
+                    onLogoutVozAccount = { viewModel.logoutVozAccount() },
+                    onToggleFloatingOverlay = { viewModel.setFloatingIslandOverlayEnabled(it) }
                 )
+            }
+
+            // Dynamic Island Floating Call Pill (Incoming and Active Calls)
+            activeCall?.let { call ->
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .statusBarsPadding()
+                        .zIndex(100f),
+                    contentAlignment = Alignment.TopCenter
+                ) {
+                    DynamicIslandCallPill(
+                        call = call,
+                        onOpenFullScreen = {
+                            val intent = Intent(context, InCallActivity::class.java).apply {
+                                flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_SINGLE_TOP
+                            }
+                            try {
+                                context.startActivity(intent)
+                            } catch (_: Exception) {}
+                        }
+                    )
+                }
             }
         }
 

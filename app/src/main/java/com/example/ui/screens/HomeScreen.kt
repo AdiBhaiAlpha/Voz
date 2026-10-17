@@ -203,9 +203,9 @@ fun HomeScreen(
                                     color = Color.White
                                 )
                                 Text(
-                                    text = "Set VOZ as default phone app for full in-call protection",
+                                    text = "Android routes incoming calls to your default phone app. Tap SET to activate VOZ incoming caller screen.",
                                     style = MaterialTheme.typography.bodySmall,
-                                    color = Color.White.copy(alpha = 0.7f)
+                                    color = Color.White.copy(alpha = 0.75f)
                                 )
                             }
                         }
