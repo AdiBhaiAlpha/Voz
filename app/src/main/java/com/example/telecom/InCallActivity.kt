@@ -865,6 +865,10 @@ fun VozActiveCallScreen(
                 fontWeight = FontWeight.Bold,
                 color = if (call.isOnHold) Color(0xFFFBBF24) else VozLimeGreen
             )
+
+            if (!call.isOnHold && call.state == CallLifecycleState.ACTIVE) {
+                VozAudioEqualizerWave(isActive = true)
+            }
         }
 
         // DTMF In-Call Keypad (Overlay Card)
@@ -1105,5 +1109,41 @@ private fun VozCallRoundToggle(
             fontWeight = FontWeight.Medium,
             color = if (isActive) VozLimeGreen else Color.White.copy(alpha = 0.75f)
         )
+    }
+}
+
+@Composable
+private fun VozAudioEqualizerWave(isActive: Boolean) {
+    if (!isActive) return
+    val infiniteTransition = rememberInfiniteTransition(label = "equalizer")
+    val heights = (1..5).map { index ->
+        infiniteTransition.animateFloat(
+            initialValue = 10f,
+            targetValue = (20 + (index * 6)) % 36 + 10f,
+            animationSpec = infiniteRepeatable(
+                animation = tween(280 + index * 90, easing = FastOutSlowInEasing),
+                repeatMode = RepeatMode.Reverse
+            ),
+            label = "eq_$index"
+        )
+    }
+
+    Row(
+        modifier = Modifier
+            .padding(top = 12.dp)
+            .height(32.dp),
+        horizontalArrangement = Arrangement.Center,
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        for (h in heights) {
+            Box(
+                modifier = Modifier
+                    .padding(horizontal = 3.dp)
+                    .width(4.dp)
+                    .height(h.value.dp)
+                    .clip(RoundedCornerShape(2.dp))
+                    .background(VozLimeGreen)
+            )
+        }
     }
 }
