@@ -14,14 +14,14 @@ android {
         targetSdk = 34
         versionCode = 1
         versionName = "1.0"
-        val serviceUrl = providers.gradleProperty("VOZ_SERVICE_URL").orElse("").get()
+        val serviceUrl = providers.gradleProperty("VOZ_SERVICE_URL").orElse(providers.environmentVariable("VOZ_SERVICE_URL")).orElse("").get()
         require(serviceUrl.isEmpty() || serviceUrl.matches(Regex("https://[A-Za-z0-9.-]+(?::[0-9]+)?/?"))) {
             "VOZ_SERVICE_URL must be an HTTPS origin"
         }
         buildConfigField("String", "VOZ_SERVICE_URL", "\"${serviceUrl.trimEnd('/')}\"")
 
         listOf("FCM_APPLICATION_ID", "FCM_API_KEY", "FCM_PROJECT_ID", "FCM_SENDER_ID").forEach { name ->
-            val value = providers.gradleProperty(name).orElse("").get()
+            val value = providers.gradleProperty(name).orElse(providers.environmentVariable(name)).orElse("").get()
             require(value.matches(Regex("[A-Za-z0-9:_-]*"))) { "Invalid Firebase configuration value" }
             buildConfigField("String", name, "\"$value\"")
         }

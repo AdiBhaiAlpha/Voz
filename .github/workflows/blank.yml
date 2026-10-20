@@ -55,3 +55,37 @@ jobs:
         name: debug-apk
         path: app/build/outputs/apk/debug/app-debug.apk
         if-no-files-found: ignore
+
+  registration-ui:
+    name: Registration UI (emulator only)
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-java@v6
+        with:
+          distribution: temurin
+          java-version: '17'
+      - uses: gradle/actions/setup-gradle@v6
+      - name: Enable hardware acceleration on the disposable runner
+        run: |
+          echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules
+          sudo udevadm control --reload-rules
+          sudo udevadm trigger --name-match=kvm
+      - name: Run registration form validation (not network, FCM or audio)
+        uses: ReactiveCircus/android-emulator-runner@c9c93e6ba9c4194322e114c40970d5983d9a07cc # v2.38.0
+        with:
+          api-level: 30
+          arch: x86_64
+          target: default
+          disable-animations: true
+          script: bash .github/scripts/android-check.sh connectedDebugAndroidTest -Pandroid.testInstrumentationRunnerArguments.class=com.example.telecom.OnlineRegistrationUiTest
+      - name: Preserve emulator test results
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: registration-ui-reports
+          path: |
+            app/build/reports/androidTests/
+            app/build/outputs/androidTest-results/
+          if-no-files-found: ignore

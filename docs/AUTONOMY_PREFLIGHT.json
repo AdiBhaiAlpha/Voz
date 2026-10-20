@@ -1,0 +1,46 @@
+{
+  "schemaVersion": 1,
+  "mode": "offline-capability-inventory",
+  "status": "blocked",
+  "productionReady": false,
+  "checks": {
+    "durableHostConfiguration": false,
+    "serviceOriginConfiguration": false,
+    "turnHostnameConfiguration": false,
+    "turnPublicAddressConfiguration": false,
+    "firebaseClientConfiguration": false,
+    "firebaseServerFileReadable": false,
+    "localJavaAvailable": false,
+    "localDockerAvailable": false,
+    "localAdbAvailable": false
+  },
+  "blockers": [
+    "NO_CONFIGURED_DURABLE_SERVICE_ORIGIN",
+    "NO_CONFIGURED_PUBLIC_TURN_HOST",
+    "FCM_CONFIGURATION_UNAVAILABLE",
+    "LOCAL_ANDROID_BUILD_TOOLCHAIN_UNAVAILABLE",
+    "LOCAL_CONTAINER_RUNTIME_UNAVAILABLE",
+    "LOCAL_ANDROID_DEVICE_ACCESS_UNAVAILABLE"
+  ],
+  "credentialPresenceOnly": {
+    "github": true,
+    "cloudflare": false,
+    "oracle": false,
+    "railway": false,
+    "render": false,
+    "koyeb": false,
+    "huggingFace": false,
+    "authorizedSshTarget": false
+  },
+  "notVerified": [
+    "provider_permissions",
+    "DNS_and_ownership",
+    "public_TLS",
+    "database_durability",
+    "TURN_allocation",
+    "FCM_authentication_and_delivery",
+    "Android_installation",
+    "two_device_media",
+    "Doze_and_locked_incoming"
+  ]
+}
