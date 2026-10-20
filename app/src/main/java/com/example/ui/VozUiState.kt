@@ -25,7 +25,8 @@ enum class VozDestination(val titleRes: Int, val icon: ImageVector) {
 
 data class PendingCallConfirmation(
     val displayName: String,
-    val rawNumber: String
+    val rawNumber: String,
+    val explicitSimId: String? = null
 )
 
 data class PendingSimSelection(
@@ -36,6 +37,7 @@ data class PendingSimSelection(
 sealed interface DetailSheetTarget {
     data class Contact(val contact: ContactItem) : DetailSheetTarget
     data class CallRecordDetail(
+        val recordId: Long,
         val rawNumber: String,
         val normalizedNumber: String,
         val displayName: String?,
@@ -53,6 +55,7 @@ data class VozUiState(
     val isDialpadVisible: Boolean = false,
     val homeSearchOrDialInput: String = "",
     val contactsSearchQuery: String = "",
+    val favoritesOnly: Boolean = false,
     val activitySearchQuery: String = "",
     val activityFilter: CallLogFilter = CallLogFilter.ALL,
     val preferences: VozUserPreferences = VozUserPreferences(),

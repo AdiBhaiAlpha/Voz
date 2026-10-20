@@ -94,7 +94,7 @@ class TelecomDialerManager(private val context: Context) {
     fun getAvailableSimAccounts(): List<SimSubscriptionItem> {
         val result = mutableListOf<SimSubscriptionItem>()
         try {
-            if (hasReadPhoneStatePermission()) {
+            if (ContextCompat.checkSelfPermission(context, android.Manifest.permission.READ_PHONE_STATE) == android.content.pm.PackageManager.PERMISSION_GRANTED) {
                 val subManager = context.getSystemService(Context.TELEPHONY_SUBSCRIPTION_SERVICE) as? SubscriptionManager
                 val subList = subManager?.activeSubscriptionInfoList
                 if (!subList.isNullOrEmpty()) {
@@ -105,7 +105,7 @@ class TelecomDialerManager(private val context: Context) {
                                 displayName = info.displayName?.toString() ?: "SIM ${info.simSlotIndex + 1}",
                                 carrierName = info.carrierName?.toString() ?: "Carrier",
                                 slotIndex = info.simSlotIndex,
-                                iccId = info.iccId ?: "",
+                                iccId = "", // SIM selection needs subscription ID, not privileged ICCID.
                                 color = info.iconTint
                             )
                         )

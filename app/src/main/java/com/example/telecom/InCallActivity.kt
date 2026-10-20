@@ -119,6 +119,23 @@ class InCallActivity : ComponentActivity() {
         }
     }
 
+    override fun onResume() {
+        super.onResume()
+        CallPresentationPolicy.setFullScreenVisible(true, this)
+        VozCallOverlayService.stop(this)
+    }
+
+    override fun onStop() {
+        CallPresentationPolicy.setFullScreenVisible(false, this)
+        super.onStop()
+        if (CallSessionController.activeCalls.value.any {
+            it.state != CallLifecycleState.DISCONNECTED && it.state != CallLifecycleState.DISCONNECTING
+        } && com.example.data.preferences.UserPreferencesRepository(this)
+                .loadPreferences().floatingIslandOverlayEnabled) {
+            VozCallOverlayService.startIfPermitted(this)
+        }
+    }
+
     override fun onNewIntent(intent: android.content.Intent) {
         super.onNewIntent(intent)
         setIntent(intent)
@@ -144,6 +161,35 @@ fun VozCallerRoot(onDismiss: () -> Unit) {
     // Prioritize ringing incoming call (crucial for incoming calls and Call Waiting)
     val ringingCall = activeCalls.firstOrNull { it.state == CallLifecycleState.RINGING }
     val currentCall = ringingCall ?: activeCalls.firstOrNull()
+
+    var recordingConsent by remember { mutableStateOf(false) }
+    val micPermission = androidx.activity.compose.rememberLauncherForActivityResult(
+        androidx.activity.result.contract.ActivityResultContracts.RequestPermission()
+    ) { granted ->
+        if (granted && currentCall != null) CallSessionController.toggleRecord(context, currentCall.callId)
+        else if (!granted) android.widget.Toast.makeText(context, "Microphone permission was not granted.", android.widget.Toast.LENGTH_SHORT).show()
+    }
+    if (recordingConsent && currentCall != null) {
+        androidx.compose.material3.AlertDialog(
+            onDismissRequest = { recordingConsent = false },
+            title = { Text("Record microphone?") },
+            text = { Text("Get consent from everyone first. Android may block capture during a call. This records the microphone, not guaranteed two-sided call audio.") },
+            confirmButton = { androidx.compose.material3.TextButton(onClick = {
+                recordingConsent = false
+                micPermission.launch(android.Manifest.permission.RECORD_AUDIO)
+            }) { Text("I have consent") } },
+            dismissButton = { androidx.compose.material3.TextButton(onClick = { recordingConsent = false }) { Text("Cancel") } }
+        )
+    }
+    currentCall?.recordingError?.let { error ->
+        androidx.compose.material3.AlertDialog(
+            onDismissRequest = { CallSessionController.clearRecordingError(currentCall.callId) },
+            title = { Text("Recording unavailable") }, text = { Text(error) },
+            confirmButton = { androidx.compose.material3.TextButton(onClick = {
+                CallSessionController.clearRecordingError(currentCall.callId)
+            }) { Text("OK") } }
+        )
+    }
 
     // Dismiss activity when all calls have ended
     LaunchedEffect(activeCalls) {
@@ -189,7 +235,10 @@ fun VozCallerRoot(onDismiss: () -> Unit) {
                         onToggleMute = { CallSessionController.toggleMute() },
                         onToggleSpeaker = { CallSessionController.toggleSpeaker() },
                         onToggleHold = { CallSessionController.toggleHold(currentCall.callId) },
-                        onToggleRecord = { CallSessionController.toggleRecord(context, currentCall.callId) },
+                        onToggleRecord = {
+                            if (currentCall.isRecording) CallSessionController.toggleRecord(context, currentCall.callId)
+                            else if (!currentCall.isVozOnlineCall) recordingConsent = true
+                        },
                         onPlayDtmf = { digit -> CallSessionController.playDtmf(currentCall.callId, digit) },
                         onStopDtmf = { CallSessionController.stopDtmf(currentCall.callId) },
                         onBack = onDismiss
@@ -969,7 +1018,7 @@ fun VozActiveCallScreen(
 
                 VozCallRoundToggle(
                     icon = Icons.Filled.FiberManualRecord,
-                    label = if (call.isRecording) "Rec..." else "Record",
+                    label = if (call.isRecording) "Stop rec" else "Mic rec",
                     isActive = call.isRecording,
                     activeColor = VozCrimsonEnd,
                     onClick = onToggleRecord,

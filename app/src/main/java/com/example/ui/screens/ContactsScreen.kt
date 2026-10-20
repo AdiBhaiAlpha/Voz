@@ -25,6 +25,7 @@ import androidx.compose.material.icons.filled.Contacts
 import androidx.compose.material.icons.filled.Favorite
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.Star
+import androidx.compose.material3.FilterChip
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
@@ -53,6 +54,7 @@ import com.example.ui.VozUiState
 fun ContactsScreen(
     uiState: VozUiState,
     onSearchQueryChange: (String) -> Unit,
+    onFavoritesOnlyChange: (Boolean) -> Unit,
     onContactClick: (ContactItem) -> Unit,
     onPlaceCall: (rawNumber: String, displayName: String?) -> Unit,
     onGrantPermissionsClick: () -> Unit,
@@ -94,6 +96,19 @@ fun ContactsScreen(
             shape = RoundedCornerShape(24.dp)
         )
 
+        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            FilterChip(
+                selected = !uiState.favoritesOnly,
+                onClick = { onFavoritesOnlyChange(false) },
+                label = { Text(stringResource(R.string.filter_all)) }
+            )
+            FilterChip(
+                selected = uiState.favoritesOnly,
+                onClick = { onFavoritesOnlyChange(true) },
+                label = { Text(stringResource(R.string.contacts_favorites)) },
+                modifier = Modifier.testTag("contacts_favorites_filter")
+            )
+        }
         Spacer(modifier = Modifier.height(12.dp))
 
         if (!uiState.hasContactsPermission) {
@@ -127,13 +142,13 @@ fun ContactsScreen(
                     )
                     Spacer(modifier = Modifier.height(12.dp))
                     Text(
-                        text = stringResource(R.string.contacts_empty_title),
+                        text = stringResource(if (uiState.contactsSearchQuery.isNotBlank() || uiState.favoritesOnly) R.string.contacts_no_matches else R.string.contacts_empty_title),
                         style = MaterialTheme.typography.titleMedium,
                         fontWeight = FontWeight.Bold
                     )
                     Spacer(modifier = Modifier.height(4.dp))
                     Text(
-                        text = stringResource(R.string.contacts_empty_subtitle),
+                        text = stringResource(if (uiState.favoritesOnly) R.string.contacts_favorites_hint else if (uiState.contactsSearchQuery.isNotBlank()) R.string.contacts_search_hint else R.string.contacts_empty_subtitle),
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
@@ -222,6 +237,9 @@ fun ContactListItem(
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         Text(
                             text = contact.displayName,
+                            maxLines = 1,
+                            overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis,
+                            modifier = Modifier.weight(1f, fill = false),
                             style = MaterialTheme.typography.titleMedium,
                             fontWeight = FontWeight.SemiBold
                         )

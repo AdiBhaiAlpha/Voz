@@ -30,14 +30,13 @@ class CallActionReceiver : BroadcastReceiver() {
                     CallManager.answerCall()
                 }
 
-                // Bring up the in-call UI for the answered call
-                val inCallIntent = Intent(context, InCallActivity::class.java).apply {
-                    flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_SINGLE_TOP
-                }
-                try {
-                    context.startActivity(inCallIntent)
-                } catch (e: Exception) {
-                    Log.w("CallActionReceiver", "Failed to launch in-call activity from answer action", e)
+                if (CallPresentationPolicy.shouldUseFullScreen(context)) {
+                    val inCallIntent = Intent(context, InCallActivity::class.java).apply {
+                        flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_SINGLE_TOP
+                    }
+                    try { context.startActivity(inCallIntent) } catch (_: Exception) {}
+                } else {
+                    VozCallOverlayService.startIfPermitted(context)
                 }
             }
             ACTION_DECLINE_OR_HANGUP -> {

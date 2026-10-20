@@ -1,0 +1,7 @@
+# Use only AFTER placing a real service-account JSON outside version control.
+services:
+  api:
+    environment:
+      GOOGLE_APPLICATION_CREDENTIALS: /run/secrets/firebase-admin.json
+    volumes:
+      - ${FCM_CREDENTIALS_PATH:?Set absolute FCM_CREDENTIALS_PATH}:/run/secrets/firebase-admin.json:ro

@@ -1,12 +1,9 @@
 <?xml version="1.0" encoding="utf-8"?>
 <full-backup-content>
-    <exclude
-        domain="database"
-        path="voz_call_assist.db"/>
-    <exclude
-        domain="database"
-        path="voz_call_assist.db-shm"/>
-    <exclude
-        domain="database"
-        path="voz_call_assist.db-wal"/>
+    <!-- Call notes, blocklists, recordings and diagnostics must remain on device. -->
+    <exclude domain="root" path="." />
+    <exclude domain="database" path="." />
+    <exclude domain="sharedpref" path="." />
+    <exclude domain="file" path="." />
+    <exclude domain="external" path="." />
 </full-backup-content>

@@ -7,9 +7,9 @@ import java.util.Locale
 
 object CallHistoryGrouper {
 
-    private val dayFormat = SimpleDateFormat("yyyyMMdd", Locale.US)
-    private val timeFormat = SimpleDateFormat("h:mm a", Locale.getDefault())
-    private val fullDateFormat = SimpleDateFormat("MMM d, yyyy", Locale.getDefault())
+    private val dayFormat get() = SimpleDateFormat("yyyyMMdd", Locale.US)
+    private val timeFormat get() = SimpleDateFormat("h:mm a", Locale.getDefault())
+    private val fullDateFormat get() = SimpleDateFormat("MMM d, yyyy", Locale.getDefault())
 
     fun groupCallRecords(records: List<CallRecord>): List<GroupedCallSession> {
         if (records.isEmpty()) return emptyList()
@@ -21,7 +21,7 @@ object CallHistoryGrouper {
         fun flushBatch() {
             if (currentBatch.isNotEmpty()) {
                 val primary = currentBatch.first()
-                val sessionKey = "${primary.normalizedNumber}_${primary.timestampMillis}"
+                val sessionKey = "${primary.id}_${primary.timestampMillis}"
                 val allTypes = currentBatch.map { it.callType }
                 val header = formatDateHeader(primary.timestampMillis)
                 grouped.add(
@@ -40,7 +40,7 @@ object CallHistoryGrouper {
 
         val recordCal = Calendar.getInstance()
 
-        for (record in records) {
+        for (record in records.sortedByDescending { it.timestampMillis }) {
             recordCal.timeInMillis = record.timestampMillis
             val dayKey = dayFormat.format(Date(record.timestampMillis))
             val numberKey = record.normalizedNumber.ifBlank { record.rawNumber }

@@ -1,0 +1,55 @@
+{
+  "schemaVersion": 1,
+  "verifiedDate": "2026-10-20",
+  "branch": "arena/d7ba82e8-voz",
+  "testedSourceCommit": "66269c36d34a006d20fdc93486798f401cbaedbd",
+  "android": {
+    "runId": 39369496378,
+    "url": "https://github.com/AdiBhaiAlpha/Voz/actions/runs/39369496378",
+    "conclusion": "success",
+    "debugAssembly": "passed",
+    "lint": "passed",
+    "jvm": {"cases": 24, "failures": 0, "skipped": 0, "xmlGuardPassed": true},
+    "instrumented": {
+      "cases": 2,
+      "failures": 0,
+      "skipped": 0,
+      "xmlGuardPassed": true,
+      "platform": "API30 x86_64 emulator",
+      "tests": [
+        "com.example.telecom.OnlineRegistrationUiTest.newIdentityRequiresDisplayNameAndCredentials",
+        "com.example.online.NativeVoicePeerIntegrationTest.twoNativePeersNegotiateAndExchangeAudioRtp"
+      ],
+      "scope": "Registration form and two real native WebRTC peers on one emulator, not two physical devices or public calls"
+    },
+    "debugApkArtifact": {
+      "id": 12240293966,
+      "archiveSizeBytes": 42094900,
+      "productionConfigured": false,
+      "releaseSigned": false
+    }
+  },
+  "server": {
+    "runId": 39369496312,
+    "url": "https://github.com/AdiBhaiAlpha/Voz/actions/runs/39369496312",
+    "conclusion": "success",
+    "strictTypeScriptBuild": "passed",
+    "unitCases": 14,
+    "postgresIntegrationSubtests": 12,
+    "productionAuditVulnerabilities": 0,
+    "realCoturnSubtests": 6,
+    "coturnImage": "coturn/coturn:4.6.3",
+    "coturnScope": "Isolated loopback UDP/TCP/TLS transport packet relay, bad HMAC, actual credential expiry/new allocation, fresh credential recovery, denied private peer; not public hosting"
+  },
+  "notVerified": [
+    "durable public deployment and DNS/TLS",
+    "actual Firebase authentication and delivery",
+    "two physical Android devices on different networks",
+    "human-audible bidirectional speech",
+    "public TURN allocations and production CA validation",
+    "real Android14+ foreground-service, locked, Doze and OEM behavior",
+    "production-configured signed release"
+  ],
+  "productionReady": false,
+  "publicCallingActivated": false
+}

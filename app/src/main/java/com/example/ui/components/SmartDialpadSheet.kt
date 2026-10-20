@@ -10,6 +10,8 @@ import android.os.VibrationEffect
 import android.os.Vibrator
 import android.os.VibratorManager
 import androidx.compose.foundation.ExperimentalFoundationApi
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.background
 import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.Arrangement
@@ -19,6 +21,7 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -29,6 +32,7 @@ import androidx.compose.material.icons.automirrored.filled.Backspace
 import androidx.compose.material.icons.filled.Call
 import androidx.compose.material.icons.filled.ContentPaste
 import androidx.compose.material3.Button
+import androidx.compose.material3.FilterChip
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
@@ -37,12 +41,14 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.stringResource
@@ -52,6 +58,7 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.R
+import com.example.domain.VozAddress
 import com.example.domain.PhoneNormalizer
 import com.example.domain.SimSubscriptionItem
 
@@ -69,12 +76,15 @@ fun SmartDialpad(
     isSoundEnabled: Boolean,
     isHapticEnabled: Boolean,
     onDigitPressed: (Char) -> Unit,
+    onInputChange: (String) -> Unit,
+    onEnableVoz: () -> Unit,
     onBackspace: () -> Unit,
     onClearAll: () -> Unit,
     onPlaceCall: (explicitSimId: String?) -> Unit,
     modifier: Modifier = Modifier
 ) {
     val context = LocalContext.current
+    val maxSheetHeight = LocalConfiguration.current.screenHeightDp.dp * 0.72f
 
     val toneGen = remember(isSoundEnabled) {
         if (isSoundEnabled) {
@@ -85,6 +95,13 @@ fun SmartDialpad(
             }
         } else null
     }
+
+    DisposableEffect(toneGen) {
+        onDispose { toneGen?.release() }
+    }
+    val isVoz = VozAddress.isVoz(currentInput)
+    val canCall = if (isVoz) VozAddress.isComplete(currentInput)
+        else PhoneNormalizer.isValidDialableNumber(currentInput)
 
     fun playToneAndHaptic(char: Char) {
         if (isHapticEnabled) {
@@ -149,6 +166,7 @@ fun SmartDialpad(
     Card(
         modifier = modifier
             .fillMaxWidth()
+            .heightIn(max = maxSheetHeight)
             .testTag("smart_dialpad_sheet"),
         shape = RoundedCornerShape(topStart = 24.dp, topEnd = 24.dp),
         colors = CardDefaults.cardColors(
@@ -159,6 +177,7 @@ fun SmartDialpad(
         Column(
             modifier = Modifier
                 .fillMaxWidth()
+                .verticalScroll(rememberScrollState())
                 .padding(horizontal = 24.dp, vertical = 16.dp),
             horizontalAlignment = Alignment.CenterHorizontally
         ) {
@@ -172,6 +191,28 @@ fun SmartDialpad(
 
             Spacer(modifier = Modifier.height(12.dp))
 
+            Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                FilterChip(
+                    selected = !isVoz,
+                    onClick = { if (isVoz) onClearAll() },
+                    label = { Text(stringResource(R.string.voz_cellular_mode)) },
+                    modifier = Modifier.testTag("dialpad_cellular_mode")
+                )
+                FilterChip(
+                    selected = isVoz,
+                    onClick = onEnableVoz,
+                    label = { Text("VOZ") },
+                    modifier = Modifier.testTag("dialpad_voz_mode")
+                )
+            }
+            if (isVoz) {
+                Text(
+                    stringResource(if (canCall) R.string.voz_address_detected else R.string.voz_address_hint),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
+
             // Display area with formatted number and paste/backspace buttons
             Row(
                 modifier = Modifier
@@ -181,18 +222,17 @@ fun SmartDialpad(
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.SpaceBetween
             ) {
-                // Paste button if empty
-                if (currentInput.isEmpty()) {
+                // Paste remains available immediately after selecting VOZ mode.
+                if (currentInput.isEmpty() || currentInput == VozAddress.PREFIX) {
                     IconButton(
                         onClick = {
                             val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as? ClipboardManager
-                            val clipText = clipboard?.primaryClip?.getItemAt(0)?.text?.toString()
+                            val clipText = clipboard?.primaryClip?.takeIf { it.itemCount > 0 }?.getItemAt(0)?.text?.toString()
                             if (!clipText.isNullOrBlank()) {
-                                for (ch in clipText) {
-                                    if (ch.isDigit() || ch == '+' || ch == '*' || ch == '#') {
-                                        onDigitPressed(ch)
-                                    }
-                                }
+                                // Keep the VOZ namespace intact; do not paste its digits as a SIM number.
+                                onInputChange(if (VozAddress.isVoz(clipText))
+                                    VozAddress.normalize(clipText) ?: clipText.trim()
+                                else PhoneNormalizer.sanitizeDialInput(clipText))
                             }
                         },
                         modifier = Modifier.testTag("dialpad_paste_button")
@@ -272,13 +312,17 @@ fun SmartDialpad(
                                 .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.6f))
                                 .combinedClickable(
                                     onClick = {
-                                        playToneAndHaptic(spec.digit)
-                                        onDigitPressed(spec.digit)
+                                        if (!isVoz || spec.digit in '0'..'9') {
+                                            playToneAndHaptic(spec.digit)
+                                            onDigitPressed(spec.digit)
+                                        }
                                     },
                                     onLongClick = {
-                                        val longChar = spec.longPressChar ?: spec.digit
-                                        playToneAndHaptic(longChar)
-                                        onDigitPressed(longChar)
+                                        val longChar = if (isVoz) spec.digit else spec.longPressChar ?: spec.digit
+                                        if (!isVoz || longChar in '0'..'9') {
+                                            playToneAndHaptic(longChar)
+                                            onDigitPressed(longChar)
+                                        }
                                     }
                                 )
                                 .testTag("dialpad_key_${spec.digit}"),
@@ -311,7 +355,7 @@ fun SmartDialpad(
             Spacer(modifier = Modifier.height(14.dp))
 
             // Bottom Call Trigger(s)
-            if (availableSims.size > 1) {
+            if (!isVoz && availableSims.size > 1) {
                 // Multi-SIM quick call buttons
                 Row(
                     modifier = Modifier.fillMaxWidth(),
@@ -320,6 +364,7 @@ fun SmartDialpad(
                     for (sim in availableSims.take(2)) {
                         Button(
                             onClick = { onPlaceCall(sim.subscriptionId.toString()) },
+                            enabled = canCall,
                             modifier = Modifier
                                 .weight(1f)
                                 .height(52.dp)
@@ -342,8 +387,10 @@ fun SmartDialpad(
                 // Single large call button
                 Button(
                     onClick = { onPlaceCall(null) },
+                    enabled = canCall,
                     modifier = Modifier
-                        .size(width = 160.dp, height = 56.dp)
+                        .fillMaxWidth()
+                        .height(56.dp)
                         .testTag("dialpad_call_button"),
                     colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF2E7D32)),
                     shape = RoundedCornerShape(28.dp)
@@ -355,7 +402,7 @@ fun SmartDialpad(
                     )
                     Spacer(modifier = Modifier.width(8.dp))
                     Text(
-                        text = "Call",
+                        text = if (isVoz) stringResource(R.string.voz_online_call) else stringResource(R.string.voz_cellular_mode),
                         style = MaterialTheme.typography.titleMedium,
                         fontWeight = FontWeight.Bold
                     )

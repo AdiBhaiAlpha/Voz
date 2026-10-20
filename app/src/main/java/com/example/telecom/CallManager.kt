@@ -184,6 +184,9 @@ object CallManager {
         rawNumber: String,
         explicitSimId: String? = null
     ): CallInitiationOutcome {
+        if (com.example.domain.VozAddress.isVoz(rawNumber)) {
+            return CallInitiationOutcome.Error("VOZ IDs cannot be called over the cellular network.")
+        }
         val sanitized = PhoneNormalizer.sanitizeDialInput(rawNumber)
         if (!PhoneNormalizer.isValidDialableNumber(sanitized)) {
             return CallInitiationOutcome.Error("Please enter a valid phone number.")
@@ -242,7 +245,7 @@ object CallManager {
                             displayName = info.displayName?.toString() ?: "SIM ${info.simSlotIndex + 1}",
                             carrierName = info.carrierName?.toString() ?: "Carrier",
                             slotIndex = info.simSlotIndex,
-                            iccId = info.iccId ?: "",
+                            iccId = "", // Avoid unnecessary privileged SIM identifiers.
                             color = info.iconTint
                         )
                     }

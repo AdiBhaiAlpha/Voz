@@ -1,5 +1,7 @@
 package com.example.telecom
 
+import com.example.online.OnlineCalls
+import kotlinx.coroutines.flow.update
 import android.os.SystemClock
 import android.telecom.Call
 import android.telecom.CallAudioState
@@ -51,8 +53,7 @@ object CallSessionController {
         callCallbacks[id] = callback
         call.registerCallback(callback)
 
-        val currentList = _activeCalls.value.filter { it.callId != id }
-        _activeCalls.value = currentList + initialModel
+        _activeCalls.update { it.filter { model -> model.callId != id } + initialModel }
     }
 
     fun unregisterCall(call: Call) {
@@ -64,8 +65,8 @@ object CallSessionController {
                 call.unregisterCallback(cb)
             } catch (_: Exception) {}
         }
-        _activeCalls.value = _activeCalls.value.filter { it.callId != id }
-        if (_activeCalls.value.isEmpty() && CallAudioRecorder.isRecording.value) {
+        _activeCalls.update { models -> models.filter { it.callId != id } }
+        if ((CallAudioRecorder.recordingCallId == id || _activeCalls.value.isEmpty()) && CallAudioRecorder.isRecording.value) {
             CallAudioRecorder.stopRecording()
         }
     }
@@ -78,7 +79,7 @@ object CallSessionController {
         assistLabel: String?,
         isImportant: Boolean
     ) {
-        _activeCalls.value = _activeCalls.value.map { model ->
+        _activeCalls.update { models -> models.map { model ->
             if (model.callId == callId) {
                 model.copy(
                     displayName = displayName ?: model.displayName,
@@ -88,7 +89,7 @@ object CallSessionController {
                     isImportant = isImportant || model.isImportant
                 )
             } else model
-        }
+        } }
     }
 
     fun onAudioStateChanged(audioState: CallAudioState?) {
@@ -100,9 +101,9 @@ object CallSessionController {
         )
         // Update isMuted and isSpeakerOn in active models
         val isSpeaker = (audioState.route == CallAudioState.ROUTE_SPEAKER)
-        _activeCalls.value = _activeCalls.value.map { model ->
-            model.copy(isMuted = audioState.isMuted, isSpeakerOn = isSpeaker)
-        }
+        _activeCalls.update { models -> models.map { model ->
+            if (model.isVozOnlineCall) model else model.copy(isMuted = audioState.isMuted, isSpeakerOn = isSpeaker)
+        } }
     }
 
     private fun updateCallFromSystem(callId: String, call: Call) {
@@ -111,7 +112,7 @@ object CallSessionController {
         val connectTime = details?.connectTimeMillis ?: 0L
         val canHold = ((details?.callCapabilities ?: 0) and Call.Details.CAPABILITY_HOLD) != 0
 
-        _activeCalls.value = _activeCalls.value.map { model ->
+        _activeCalls.update { models -> models.map { model ->
             if (model.callId == callId) {
                 val dur = if (connectTime > 0 && mappedState == CallLifecycleState.ACTIVE) {
                     (System.currentTimeMillis() - connectTime) / 1000L
@@ -125,10 +126,15 @@ object CallSessionController {
                     isHoldSupported = canHold
                 )
             } else model
-        }
+        } }
+    }
+
+    fun publishOnline(model: VozCallUiModel?) {
+        _activeCalls.update { list -> list.filter { !it.isVozOnlineCall } + listOfNotNull(model) }
     }
 
     fun answerCall(callId: String) {
+        if (OnlineCalls.owns(callId)) { OnlineCalls.answerFromUi(); return }
         if (!allowAction()) return
         val call = callMap[callId] ?: return
         try {
@@ -137,6 +143,7 @@ object CallSessionController {
     }
 
     fun declineOrHangupCall(callId: String) {
+        if (OnlineCalls.owns(callId)) { OnlineCalls.endFromUi(); return }
         if (!allowAction()) return
         val call = callMap[callId] ?: return
         try {
@@ -149,12 +156,21 @@ object CallSessionController {
     }
 
     fun toggleMute() {
+        if (OnlineCalls.isOnlineActive()) { OnlineCalls.mute(); return }
         if (!allowAction()) return
         val currentMuted = _audioState.value.isMuted
         inCallServiceRef?.setMuted(!currentMuted)
     }
 
+    private var manualRouteUntil = 0L
+    fun setAutomaticAudioRoute(route: Int) {
+        if (SystemClock.elapsedRealtime() < manualRouteUntil) return
+        inCallServiceRef?.setAudioRoute(route)
+    }
+
     fun toggleSpeaker() {
+        if (OnlineCalls.isOnlineActive()) { OnlineCalls.speaker(); return }
+        manualRouteUntil = SystemClock.elapsedRealtime() + 10_000
         if (!allowAction()) return
         val service = inCallServiceRef ?: return
         val currentRoute = _audioState.value.route
@@ -167,27 +183,29 @@ object CallSessionController {
     }
 
     fun toggleRecord(context: android.content.Context, callId: String) {
+        if (OnlineCalls.owns(callId)) return
         if (!allowAction()) return
         val currentCall = _activeCalls.value.firstOrNull { it.callId == callId } ?: return
+        if (currentCall.state != CallLifecycleState.ACTIVE && !currentCall.isRecording) return
         if (currentCall.isRecording) {
-            CallAudioRecorder.stopRecording()
-            _activeCalls.value = _activeCalls.value.map {
-                if (it.callId == callId) it.copy(isRecording = false, recordingError = null) else it
-            }
+            val saved = CallAudioRecorder.stopRecording()
+            _activeCalls.update { models -> models.map {
+                if (it.callId == callId) it.copy(isRecording = false, recordingError = if (saved == null) CallAudioRecorder.lastError.value else null) else it
+            } }
         } else {
             val started = CallAudioRecorder.startRecording(context, callId)
             val err = if (!started) CallAudioRecorder.lastError.value else null
-            _activeCalls.value = _activeCalls.value.map {
+            _activeCalls.update { models -> models.map {
                 if (it.callId == callId) it.copy(isRecording = started, recordingError = err) else it
-            }
+            } }
         }
     }
 
     fun clearRecordingError(callId: String) {
         CallAudioRecorder.clearError()
-        _activeCalls.value = _activeCalls.value.map {
+        _activeCalls.update { models -> models.map {
             if (it.callId == callId) it.copy(recordingError = null) else it
-        }
+        } }
     }
 
     fun toggleHold(callId: String) {

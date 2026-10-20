@@ -1,0 +1,68 @@
+name: Online service tests
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  test:
+    runs-on: ubuntu-24.04
+    services:
+      postgres:
+        image: postgres:18-bookworm
+        env:
+          POSTGRES_USER: voztest
+          POSTGRES_PASSWORD: ci-only-password
+          POSTGRES_DB: voztest
+        ports: ['5432:5432']
+        options: >-
+          --health-cmd "pg_isready -U voztest -d voztest"
+          --health-interval 5s --health-timeout 3s --health-retries 10
+    env:
+      TEST_DATABASE_URL: postgres://voztest:ci-only-password@127.0.0.1:5432/voztest
+    defaults:
+      run:
+        working-directory: server
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: server/package-lock.json
+      - run: npm ci --ignore-scripts
+      - run: npm run build
+      - run: npm test
+      - run: npm run test:db
+      - run: npm audit --omit=dev --audit-level=high
+  turn:
+    name: Real coturn relay/authentication (isolated fixture)
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    defaults:
+      run:
+        working-directory: server
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: server/package-lock.json
+      - run: npm ci --ignore-scripts
+      - name: Test actual coturn UDP/TCP/TLS packets and expired credentials
+        run: |
+          set +e
+          npm run test:turn > /tmp/voz-turn-test.log 2>&1
+          result=$?
+          cat /tmp/voz-turn-test.log
+          if [ "$result" -ne 0 ]; then
+            python3 - <<'PY'
+          from pathlib import Path
+          message = Path('/tmp/voz-turn-test.log').read_text(errors='replace')[-30000:]
+          message = message.replace('%', '%25').replace('\r', '%0D').replace('\n', '%0A')
+          print(f'::error title=Actual coturn test::{message}')
+          PY
+          fi
+          exit "$result"

@@ -12,8 +12,24 @@ android {
         applicationId = "com.voz.calling"
         minSdk = 26
         targetSdk = 34
+        // The app supports English/Bangla, not the dozens of vendored Material
+        // locale fragments. Keep lint enabled against the actual supported set.
+        resourceConfigurations += listOf("en", "bn")
         versionCode = 1
         versionName = "1.0"
+        val serviceUrl = providers.gradleProperty("VOZ_SERVICE_URL").orElse(providers.environmentVariable("VOZ_SERVICE_URL")).orElse("").get()
+        require(serviceUrl.isEmpty() || serviceUrl.matches(Regex("https://[A-Za-z0-9.-]+(?::[0-9]+)?/?"))) {
+            "VOZ_SERVICE_URL must be an HTTPS origin"
+        }
+        buildConfigField("String", "VOZ_SERVICE_URL", "\"${serviceUrl.trimEnd('/')}\"")
+
+        listOf("FCM_APPLICATION_ID", "FCM_API_KEY", "FCM_PROJECT_ID", "FCM_SENDER_ID").forEach { name ->
+            val value = providers.gradleProperty(name).orElse(providers.environmentVariable(name)).orElse("").get()
+            require(value.matches(Regex("[A-Za-z0-9:_-]*"))) { "Invalid Firebase configuration value" }
+            buildConfigField("String", name, "\"$value\"")
+        }
+
+        buildConfigField("boolean", "VOZ_FORCE_RELAY", providers.gradleProperty("VOZ_FORCE_RELAY").orElse("false").get().toBoolean().toString())
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         vectorDrawables {
@@ -28,12 +44,14 @@ android {
                 getDefaultProguardFile("proguard-android-optimize.txt"),
                 "proguard-rules.pro"
             )
-            signingConfig = signingConfigs.getByName("debug")
+            // Release signing must be supplied by the release pipeline, never the debug key.
         }
         debug {
             signingConfig = signingConfigs.getByName("debug")
         }
     }
+    testOptions { unitTests.isIncludeAndroidResources = true }
+
     compileOptions {
         sourceCompatibility = JavaVersion.VERSION_17
         targetCompatibility = JavaVersion.VERSION_17
@@ -56,6 +74,10 @@ android {
 }
 
 dependencies {
+    implementation("io.github.webrtc-sdk:android:150.7871.01")
+    implementation("com.squareup.okhttp3:okhttp:4.12.0")
+    implementation(platform("com.google.firebase:firebase-bom:34.4.0"))
+    implementation("com.google.firebase:firebase-messaging")
     implementation(libs.androidx.core.ktx)
     implementation(libs.androidx.lifecycle.runtime.ktx)
     implementation(libs.androidx.lifecycle.runtime.compose)
@@ -74,6 +96,13 @@ dependencies {
 
     // Coil
     implementation(libs.coil.compose)
+
+    androidTestImplementation(platform(libs.androidx.compose.bom))
+    androidTestImplementation(libs.androidx.ui.test.junit4)
+    androidTestImplementation(libs.androidx.junit)
+    androidTestImplementation("androidx.test:runner:1.6.2")
+    androidTestImplementation("androidx.test:rules:1.6.1")
+    androidTestImplementation("androidx.test:core-ktx:1.6.1")
 
     // Tests
     testImplementation(libs.junit)

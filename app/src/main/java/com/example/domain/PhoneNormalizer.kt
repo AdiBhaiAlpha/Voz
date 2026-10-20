@@ -31,6 +31,7 @@ object PhoneNormalizer {
     }
 
     fun sanitizeDialInput(input: String): String {
+        if (VozAddress.isVoz(input)) return ""
         val ascii = convertBanglaDigitsToAscii(input.trim())
         val sb = StringBuilder()
         for (i in ascii.indices) {
@@ -51,19 +52,20 @@ object PhoneNormalizer {
         if (sanitized.isEmpty()) return false
         val digitCount = sanitized.count { it.isDigit() }
         // Support USSD (*121#, etc.) or minimum 3 digits (emergency numbers like 999, 911)
-        if ((sanitized.startsWith("*") || sanitized.startsWith("#")) && sanitized.length >= 2) {
+        if ((sanitized.startsWith("*") || sanitized.startsWith("#")) && sanitized.any { it in '0'..'9' }) {
             return true
         }
         return digitCount >= 3
     }
 
     fun normalizeForComparison(input: String): String {
+        if (VozAddress.isVoz(input)) return VozAddress.normalize(input).orEmpty()
         val ascii = convertBanglaDigitsToAscii(input)
         var digits = ascii.filter { it.isDigit() }
         if (digits.isEmpty()) return ""
 
         // Bangladesh standard normalization: +8801... -> 01...
-        if (digits.startsWith("880") && digits.length >= 11) {
+        if (digits.startsWith("8801") && digits.length == 13) {
             digits = "0" + digits.substring(3)
         }
         return digits
@@ -75,16 +77,12 @@ object PhoneNormalizer {
         if (normA.isEmpty() || normB.isEmpty()) return false
         if (normA == normB) return true
 
-        // Match if one ends with the last 8 digits of another (local vs international)
-        if (normA.length >= 8 && normB.length >= 8) {
-            val tailA = normA.takeLast(8)
-            val tailB = normB.takeLast(8)
-            return tailA == tailB
-        }
+        // Never use suffix matching for identity: different callers can share a suffix.
         return false
     }
 
     fun formatForDisplay(rawNumber: String): String {
+        if (VozAddress.isVoz(rawNumber)) return VozAddress.normalize(rawNumber) ?: rawNumber
         val sanitized = sanitizeDialInput(rawNumber)
         val digits = digitsOnly(sanitized)
 

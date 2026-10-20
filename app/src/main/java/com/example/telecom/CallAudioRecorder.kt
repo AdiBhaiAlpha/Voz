@@ -21,6 +21,9 @@ object CallAudioRecorder {
 
     private const val TAG = "VOZ_RECORDER"
 
+    var recordingCallId: String? = null
+        private set
+
     private var mediaRecorder: MediaRecorder? = null
     private var currentRecordingFile: File? = null
 
@@ -37,6 +40,7 @@ object CallAudioRecorder {
         ) == android.content.pm.PackageManager.PERMISSION_GRANTED
     }
 
+    @Synchronized
     fun startRecording(context: Context, callId: String): Boolean {
         if (!isAudioRecordPermissionGranted(context)) {
             _lastError.value = "RECORD_AUDIO permission is required to record calls."
@@ -44,12 +48,14 @@ object CallAudioRecorder {
         }
 
         if (_isRecording.value) {
-            return true
+            if (recordingCallId == callId) return true
+            _lastError.value = "Another call is already being recorded."
+            return false
         }
 
         try {
             val recordingsDir = File(context.filesDir, "call_recordings").apply { mkdirs() }
-            val file = File(recordingsDir, "voz_call_${callId}_${System.currentTimeMillis()}.m4a")
+            val file = File(recordingsDir, "voz_mic_${java.util.UUID.randomUUID()}.m4a")
 
             val recorder = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
                 MediaRecorder(context)
@@ -58,8 +64,10 @@ object CallAudioRecorder {
                 MediaRecorder()
             }
 
-            // Use VOICE_COMMUNICATION audio source for clear voice capture
-            recorder.setAudioSource(MediaRecorder.AudioSource.VOICE_COMMUNICATION)
+            mediaRecorder = recorder
+            currentRecordingFile = file
+            // Microphone only: Android does not grant third-party access to cellular downlink.
+            recorder.setAudioSource(MediaRecorder.AudioSource.MIC)
             recorder.setOutputFormat(MediaRecorder.OutputFormat.MPEG_4)
             recorder.setAudioEncoder(MediaRecorder.AudioEncoder.AAC)
             recorder.setAudioEncodingBitRate(128000)
@@ -68,6 +76,7 @@ object CallAudioRecorder {
 
             recorder.prepare()
             recorder.start()
+            recordingCallId = callId
 
             mediaRecorder = recorder
             currentRecordingFile = file
@@ -78,34 +87,42 @@ object CallAudioRecorder {
         } catch (e: SecurityException) {
             Log.w(TAG, "Cellular call recording restricted by Android platform security", e)
             _lastError.value = "Call recording is restricted by Android security policies on this device."
+            currentRecordingFile?.delete()
             cleanup()
             return false
         } catch (e: IOException) {
             Log.w(TAG, "Audio hardware or format error during recording", e)
             _lastError.value = "Hardware recording failed: ${e.localizedMessage ?: "I/O error"}"
+            currentRecordingFile?.delete()
             cleanup()
             return false
         } catch (e: Exception) {
             Log.w(TAG, "Unable to record call", e)
             _lastError.value = "Call recording restricted by Android on this device."
+            currentRecordingFile?.delete()
             cleanup()
             return false
         }
     }
 
+    @Synchronized
     fun stopRecording(): File? {
+        if (!_isRecording.value && mediaRecorder == null) return null
         val file = currentRecordingFile
+        var success = false
         try {
             if (_isRecording.value) {
                 mediaRecorder?.stop()
-                Log.i(TAG, "Call recording stopped successfully: ${file?.absolutePath}")
+                success = file != null && file.length() > 0
             }
-        } catch (e: Exception) {
-            Log.w(TAG, "Error stopping recorder", e)
+            if (!success) _lastError.value = "No usable audio was captured."
+        } catch (_: Exception) {
+            _lastError.value = "Recording could not be saved. Android may restrict microphone access during calls."
         } finally {
             cleanup()
         }
-        return file
+        if (!success) file?.delete()
+        return if (success) file else null
     }
 
     fun clearError() {
@@ -113,11 +130,11 @@ object CallAudioRecorder {
     }
 
     private fun cleanup() {
-        try {
-            mediaRecorder?.reset()
-            mediaRecorder?.release()
-        } catch (_: Exception) {}
+        try { mediaRecorder?.reset() } catch (_: Exception) {}
+        try { mediaRecorder?.release() } catch (_: Exception) {}
         mediaRecorder = null
+        recordingCallId = null
+        currentRecordingFile = null
         _isRecording.value = false
     }
 }
