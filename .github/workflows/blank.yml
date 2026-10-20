@@ -10,8 +10,7 @@ on:
       - 'gradle/**'
       - 'gradlew'
       - 'gradlew.bat'
-      - '.github/scripts/**'
-      - '.github/workflows/blank.yml'
+      - '.github/**'
   workflow_dispatch:
   pull_request:
     branches: [ "main", "master" ]
@@ -22,8 +21,7 @@ on:
       - 'gradle/**'
       - 'gradlew'
       - 'gradlew.bat'
-      - '.github/scripts/**'
-      - '.github/workflows/blank.yml'
+      - '.github/**'
 
 permissions:
   contents: read
@@ -38,16 +36,19 @@ jobs:
     timeout-minutes: 25
 
     steps:
-    - uses: actions/checkout@v7
+    - uses: actions/checkout@v4
+
+    - name: Ensure gradlew is executable
+      run: chmod +x gradlew
 
     - name: Set up JDK 17
-      uses: actions/setup-java@v6
+      uses: actions/setup-java@v4
       with:
         distribution: 'temurin'
         java-version: '17'
 
     - name: Set up Gradle and validate wrapper
-      uses: gradle/actions/setup-gradle@v6
+      uses: gradle/actions/setup-gradle@v4
 
     - name: Compile native Android client
       run: bash .github/scripts/android-check.sh assembleDebug
@@ -63,7 +64,7 @@ jobs:
 
     - name: Upload diagnostic reports
       if: always()
-      uses: actions/upload-artifact@v7
+      uses: actions/upload-artifact@v4
       with:
         name: android-reports
         path: app/build/reports/
@@ -71,23 +72,25 @@ jobs:
 
     - name: Upload APK Artifact
       if: always()
-      uses: actions/upload-artifact@v7
+      uses: actions/upload-artifact@v4
       with:
         name: debug-apk
         path: app/build/outputs/apk/debug/app-debug.apk
-        if-no-files-found: ignore
+        if-no-files-found: warn
 
   registration-ui:
     name: Native SDK and registration UI (one emulator)
     runs-on: ubuntu-24.04
     timeout-minutes: 25
     steps:
-      - uses: actions/checkout@v7
-      - uses: actions/setup-java@v6
+      - uses: actions/checkout@v4
+      - name: Ensure gradlew is executable
+        run: chmod +x gradlew
+      - uses: actions/setup-java@v4
         with:
           distribution: temurin
           java-version: '17'
-      - uses: gradle/actions/setup-gradle@v6
+      - uses: gradle/actions/setup-gradle@v4
       - name: Enable hardware acceleration on the disposable runner
         run: |
           echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules
@@ -105,7 +108,7 @@ jobs:
         run: python3 .github/scripts/assert-android-tests.py instrumented
       - name: Preserve emulator test results
         if: always()
-        uses: actions/upload-artifact@v7
+        uses: actions/upload-artifact@v4
         with:
           name: registration-ui-reports
           path: |
