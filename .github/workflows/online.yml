@@ -36,3 +36,33 @@ jobs:
       - run: npm test
       - run: npm run test:db
       - run: npm audit --omit=dev --audit-level=high
+  turn:
+    name: Real coturn relay/authentication (isolated fixture)
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    defaults:
+      run:
+        working-directory: server
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: server/package-lock.json
+      - run: npm ci --ignore-scripts
+      - name: Test actual coturn UDP/TCP/TLS packets and expired credentials
+        run: |
+          set +e
+          npm run test:turn > /tmp/voz-turn-test.log 2>&1
+          result=$?
+          cat /tmp/voz-turn-test.log
+          if [ "$result" -ne 0 ]; then
+            python3 - <<'PY'
+          from pathlib import Path
+          message = Path('/tmp/voz-turn-test.log').read_text(errors='replace')[-30000:]
+          message = message.replace('%', '%25').replace('\r', '%0D').replace('\n', '%0A')
+          print(f'::error title=Actual coturn test::{message}')
+          PY
+          fi
+          exit "$result"

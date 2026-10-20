@@ -13,7 +13,8 @@
     "migrate": "tsx src/migrate.ts",
     "test": "tsx --test test/*.test.ts test/*.test.mjs",
     "test:db": "tsx --test test/database.integration.ts",
-    "autonomy:preflight": "node scripts/autonomy.mjs"
+    "autonomy:preflight": "node scripts/autonomy.mjs",
+    "test:turn": "tsx --test test/turn.integration.mjs"
   },
   "dependencies": {
     "@fastify/rate-limit": "^10.3.0",
