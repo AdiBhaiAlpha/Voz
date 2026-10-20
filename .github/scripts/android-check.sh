@@ -23,7 +23,7 @@ for report in Path('app/build/reports').glob('lint-results-*.xml'):
         if issue.get('severity') not in ('Error', 'Fatal'):
             continue
         loc = issue.find('location')
-        lint.append(f"{loc.get('file', '') if loc is not None else ''}:{loc.get('line', '') if loc is not None else ''}: [{issue.get('id')}] {issue.get('message')}")
+        lint.append(f"{loc.get('file', '') if loc is not None else ''}:{loc.get('line', '') if loc is not None else ''}: [{issue.get('id')}] {issue.get('message', '')[:500]}")
 message = '\n'.join(lint or errors or lines[-25:])[:60000]
 message = message.replace('%', '%25').replace('\r', '%0D').replace('\n', '%0A')
 print(f'::error title=Android verification::{message}')

@@ -17,19 +17,23 @@ from carrier numbers; no cellular fallback or fake online activation is used.
 - **Self-hosting**: Docker Compose, PostgreSQL, Caddy HTTPS/WSS, coturn and optional
   Firebase/TURN-TLS overrides. No production credentials are included.
 
-Start with [server setup](server/README.md), [API](docs/ONLINE_API.md),
-[operations/FCM/deployment](docs/ONLINE_OPERATIONS.md), and
-[actual test results + device/release checklist](docs/ONLINE_VERIFICATION.md).
+See the [autonomous delivery/capability audit](docs/AUTONOMOUS_DELIVERY.md) and
+[actual test results + release gates](docs/ONLINE_VERIFICATION.md). Technical
+references: [server](server/README.md), [API](docs/ONLINE_API.md),
+[operations](docs/ONLINE_OPERATIONS.md). These references are not owner setup tasks.
 
-**Status:** Backend builds, security tests and real PostgreSQL integration tests
-pass. Native Android integration is implemented but could not be compiled/tested
-here (no JDK/SDK/device). Public deployment, real TURN allocation, FCM receipt and
-two-device audio remain unverified. Do not call this production ready yet.
+**Status:** Backend compilation, unit tests and real PostgreSQL integration tests
+pass locally and on authorized GitHub CI. Native Android debug assembly and JVM
+tests have now passed on a real hosted runner; lint/UI results are tracked in the
+verification document. Public deployment, real TURN allocation, FCM receipt and
+two-device audio remain blocked/unverified. This is **not production ready**.
+No owner account creation, secret submission or manual deployment is requested.
 
-## Android build
+## Automated Android build and developer reference
 
-Install JDK 17 and Android SDK 34, accept SDK licenses, configure `ANDROID_HOME` or
-untracked `local.properties`, then:
+Branch pushes automatically run Android and backend CI. The hosted runner supplies
+JDK 17 and Android SDK tooling; the owner does not need to install them.
+For reproducibility on an independently provisioned developer machine:
 
 ```sh
 ./gradlew --no-daemon testDebugUnitTest lintDebug assembleDebug
@@ -37,13 +41,16 @@ untracked `local.properties`, then:
 ./gradlew connectedDebugAndroidTest
 ```
 
-Set `VOZ_SERVICE_URL=https://your-real-domain` and Firebase client properties in
-untracked Gradle properties as documented. Register/sign in in Tools → VOZ online.
+The native build reads existing authorized `VOZ_SERVICE_URL` and Firebase client
+configuration from Gradle properties or environment variables. Absent a real
+service configuration, online activation remains disabled rather than using a
+preview/sample backend. The registration UI is under Tools → VOZ online.
 Real identity registration requires a validated display name and authenticated
 server session. Existing locally generated/demo IDs are not callable identities.
 
 Release signing must be supplied securely; it intentionally does not use the debug
-key. Existing repository APKs predate the changes and have **not** been rebuilt.
+key. The legacy APK files in the repository are unchanged. Newly compiled debug APKs
+are separate GitHub Actions artifacts, not signed/configured production releases.
 
 ## Native cellular UX improvements
 

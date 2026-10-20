@@ -1,6 +1,10 @@
 # Deploying and operating VOZ
 
-## Dependencies you must supply
+> Operator reference, not owner assignments. Autonomous delivery status and
+> external capability blockers are recorded in [AUTONOMOUS_DELIVERY.md](AUTONOMOUS_DELIVERY.md).
+> These instructions do not imply that any public deployment has happened.
+
+## Required deployment capabilities
 
 - Linux VPS/public IPv4, controlled DNS names, Docker Engine + Compose v2.
 - Public HTTPS name for the API; public TURN address and reachable relay ports.

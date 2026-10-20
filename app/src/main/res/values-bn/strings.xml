@@ -223,4 +223,15 @@
     <string name="voz_online_subtitle">ইন্টারনেট কল করতে কলার আইডি তৈরি করুন বা সাইন ইন করুন।</string>
     <string name="voz_endpoint_missing">এই বিল্ডে অনলাইন সার্ভিস সংযুক্ত করা হয়নি।</string>
     <string name="voz_open_online">VOZ অনলাইন খুলুন</string>
+    <string name="err_call_preview_env">এই পরিবেশে প্রকৃত সিম কল করা যাচ্ছে না। সক্রিয় সিম ও প্রয়োজনীয় অনুমতিসহ উপযুক্ত অ্যান্ড্রয়েড ফোনে VOZ ব্যবহার করুন।</string>
+    <string name="err_no_sim_card">কোনো সক্রিয় সিম পাওয়া যায়নি। মোবাইল নেটওয়ার্কে কল করতে সক্রিয় সিম প্রয়োজন।</string>
+    <string name="err_no_call_permission">মোবাইল নেটওয়ার্কে কল করতে CALL_PHONE অনুমতি প্রয়োজন।</string>
+    <string name="err_invalid_phone_number">একটি সঠিক ফোন নম্বর লিখুন।</string>
+    <string name="truecaller_verified_badge">যাচাইকৃত পরিচিতি</string>
+    <string name="truecaller_unknown_badge">সংরক্ষিত নয় এমন নম্বর</string>
+    <string name="truecaller_incoming_title">ইনকামিং সিম কল</string>
+    <string name="truecaller_outgoing_title">সিমের মাধ্যমে কল করা হচ্ছে</string>
+    <string name="truecaller_active_title">VOZ সুরক্ষিত কল</string>
+    <string name="truecaller_swipe_to_answer">রিসিভ করতে চাপুন</string>
+    <string name="truecaller_tap_to_decline">প্রত্যাখ্যান করতে চাপুন</string>
 </resources>

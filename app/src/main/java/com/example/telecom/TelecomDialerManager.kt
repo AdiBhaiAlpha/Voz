@@ -10,6 +10,7 @@ import android.telecom.PhoneAccountHandle
 import android.telecom.TelecomManager
 import android.telephony.SubscriptionManager
 import androidx.core.content.ContextCompat
+import androidx.annotation.ChecksPermission
 import com.example.domain.PhoneNormalizer
 import com.example.domain.SimSubscriptionItem
 
@@ -77,6 +78,7 @@ class TelecomDialerManager(private val context: Context) {
         }
     }
 
+    @ChecksPermission(android.Manifest.permission.CALL_PHONE)
     fun hasCallPhonePermission(): Boolean {
         return ContextCompat.checkSelfPermission(
             context,
@@ -84,6 +86,7 @@ class TelecomDialerManager(private val context: Context) {
         ) == android.content.pm.PackageManager.PERMISSION_GRANTED
     }
 
+    @ChecksPermission(android.Manifest.permission.READ_PHONE_STATE)
     fun hasReadPhoneStatePermission(): Boolean {
         return ContextCompat.checkSelfPermission(
             context,
@@ -105,7 +108,7 @@ class TelecomDialerManager(private val context: Context) {
                                 displayName = info.displayName?.toString() ?: "SIM ${info.simSlotIndex + 1}",
                                 carrierName = info.carrierName?.toString() ?: "Carrier",
                                 slotIndex = info.simSlotIndex,
-                                iccId = info.iccId ?: "",
+                                iccId = "", // SIM selection needs subscription ID, not privileged ICCID.
                                 color = info.iconTint
                             )
                         )

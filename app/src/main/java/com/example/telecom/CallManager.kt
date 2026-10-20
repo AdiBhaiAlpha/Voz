@@ -245,7 +245,7 @@ object CallManager {
                             displayName = info.displayName?.toString() ?: "SIM ${info.simSlotIndex + 1}",
                             carrierName = info.carrierName?.toString() ?: "Carrier",
                             slotIndex = info.simSlotIndex,
-                            iccId = info.iccId ?: "",
+                            iccId = "", // Avoid unnecessary privileged SIM identifiers.
                             color = info.iconTint
                         )
                     }

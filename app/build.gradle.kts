@@ -12,6 +12,9 @@ android {
         applicationId = "com.voz.calling"
         minSdk = 26
         targetSdk = 34
+        // The app supports English/Bangla, not the dozens of vendored Material
+        // locale fragments. Keep lint enabled against the actual supported set.
+        resourceConfigurations += listOf("en", "bn")
         versionCode = 1
         versionName = "1.0"
         val serviceUrl = providers.gradleProperty("VOZ_SERVICE_URL").orElse(providers.environmentVariable("VOZ_SERVICE_URL")).orElse("").get()

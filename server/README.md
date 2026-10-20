@@ -7,16 +7,25 @@ There is no SIM fallback, local ID activation, server-side audio proxy or fake t
 
 ## Status and evidence
 
-Backend TypeScript builds. Three security unit tests and a real PostgreSQL suite
-with twelve integration subtests pass. Production npm audit reports no known
+Backend TypeScript builds. Security/capability/CI-diagnostic unit tests and a real
+PostgreSQL suite with twelve integration subtests pass. Production npm audit reports no known
 vulnerabilities in the locked dependencies at verification time.
 
 Native Android registration, encrypted session storage, device registration, audio
-negotiation, reconnect/replay and FCM handling are implemented but **not compiled or
-device-verified in this workspace** (no JDK/SDK/adb). No public server, TURN service,
-Firebase project or two-device call was fabricated. See [verification](../docs/ONLINE_VERIFICATION.md).
+negotiation, reconnect/replay and FCM handling are implemented. Debug assembly and
+JVM tests now pass on authorized hosted GitHub CI; real-device media/push remains
+unverified. No public server, TURN service, Firebase project or two-device call
+was fabricated. No owner setup is requested; see the
+[autonomous capability audit](../docs/AUTONOMOUS_DELIVERY.md). See [verification](../docs/ONLINE_VERIFICATION.md).
 
-## Quick local backend verification
+## Automated CI and local developer verification
+
+Branch pushes run backend build/tests/audit and Android compilation/tests.
+`npm run autonomy:preflight` provides an offline, secret-redacted capability check
+(exit 2 correctly means blocked, not a deployed server). The following commands
+are developer reproduction references, not an owner deployment assignment.
+
+### Backend
 
 Node 22.13+:
 
