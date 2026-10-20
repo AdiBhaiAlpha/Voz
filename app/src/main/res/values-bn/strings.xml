@@ -195,4 +195,32 @@
     <string name="tooltip_label">টুলটিপ দেখুন</string>
     <string name="unblock_action">আনব্লক</string>
     <string name="unknown_caller">অপরিচিত নম্বর</string>
+
+    <string name="contacts_favorites">পছন্দের</string>
+    <string name="contacts_no_matches">মিলে এমন পরিচিতি নেই</string>
+    <string name="contacts_favorites_hint">এখানে দেখতে পরিচিতির বিস্তারিত থেকে পছন্দের হিসেবে চিহ্নিত করুন।</string>
+    <string name="contacts_search_hint">অন্য নাম বা ফোন নম্বর দিয়ে খুঁজুন।</string>
+    <string name="calling_availability_title">কল করার সুবিধা</string>
+    <string name="calling_availability_body">কল আপনার সিম ও অপারেটরের প্ল্যান ব্যবহার করে। এই সংস্করণে অনলাইন কল বা ক্লাউড অ্যাকাউন্ট নেই। নোট, পছন্দের তালিকা ও ব্লকলিস্ট এই ডিভাইসে থাকে।</string>
+    <string name="clear_demo_profile">পুরোনো ডেমো প্রোফাইল মুছুন</string>
+    <string name="delete_record_title">এই কল মুছবেন?</string>
+    <string name="delete_record_body">এটি সিস্টেমের কল তালিকা থেকে এই এন্ট্রি স্থায়ীভাবে মুছে দেবে।</string>
+    <string name="delete_record_action">মুছুন</string>
+    <string name="voz_invalid_address">সাত সংখ্যার VOZ আইডি দিন, যেমন VOZ-302-8671।</string>
+    <string name="voz_name_required">আগে টুলস → VOZ প্রোফাইলে নাম সেট করুন। অনলাইন সেবা এখনো চালু হয়নি।</string>
+    <string name="voz_service_unavailable">VOZ আইডি শনাক্ত হয়েছে। অনলাইন কলের সার্ভিস এখনো সংযুক্ত নয়। কোনো সিম কল করা হয়নি।</string>
+    <string name="voz_name_error">কমপক্ষে একটি অক্ষর বা সংখ্যাসহ ২–৫০ অক্ষরের নাম দিন।</string>
+    <string name="voz_name_saved">নাম এই ডিভাইসে সেভ হয়েছে। কলার আইডি নিবন্ধনের জন্য অনলাইন সেবা প্রয়োজন।</string>
+    <string name="voz_online_call">VOZ অনলাইন কল</string>
+    <string name="voz_cellular_mode">সিম কল</string>
+    <string name="voz_address_detected">VOZ কলার আইডি • ইন্টারনেট কল</string>
+    <string name="voz_address_hint">VOZ-এর পরে ৭টি সংখ্যা দিন • যেমন VOZ-302-8671</string>
+    <string name="voz_profile_title">VOZ প্রোফাইল • স্থানীয় খসড়া</string>
+    <string name="voz_display_name">নাম (আবশ্যক)</string>
+    <string name="voz_save_name">নাম সেভ করুন</string>
+    <string name="voz_registration_pending">কলার আইডি চালু করার আগে নাম আবশ্যক। নাম সেভ করলে কলযোগ্য আইডি নিবন্ধন হয় না। এই বিল্ডে সার্ভার নিবন্ধন ও অনলাইন কল চালু নেই।</string>
+    <string name="voz_online_title">VOZ অনলাইন</string>
+    <string name="voz_online_subtitle">ইন্টারনেট কল করতে কলার আইডি তৈরি করুন বা সাইন ইন করুন।</string>
+    <string name="voz_endpoint_missing">এই বিল্ডে অনলাইন সার্ভিস সংযুক্ত করা হয়নি।</string>
+    <string name="voz_open_online">VOZ অনলাইন খুলুন</string>
 </resources>

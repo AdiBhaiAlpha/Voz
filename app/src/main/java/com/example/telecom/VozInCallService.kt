@@ -37,6 +37,8 @@ class VozInCallService : InCallService() {
 
     private val serviceScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
     private var database: VozDatabase? = null
+    private val notificationCallbacks = java.util.concurrent.ConcurrentHashMap<Call, Call.Callback>()
+    private var proximityRouter: ProximityAudioRouter? = null
     private var preferencesRepository: UserPreferencesRepository? = null
 
     companion object {
@@ -52,6 +54,7 @@ class VozInCallService : InCallService() {
         CallManager.attachInCallService(this)
         CallSessionController.attachService(this)
         ensureNotificationChannels()
+        proximityRouter = ProximityAudioRouter(this).also { it.start() }
 
         preferencesRepository = UserPreferencesRepository(applicationContext)
         database = Room.databaseBuilder(
@@ -63,6 +66,7 @@ class VozInCallService : InCallService() {
 
     override fun onCallAdded(call: Call) {
         super.onCallAdded(call)
+        if (com.example.online.OnlineCalls.isOnlineActive()) com.example.online.OnlineCalls.endFromUi()
         val details = call.details
         val rawNumber = details?.handle?.schemeSpecificPart ?: ""
         val normalized = PhoneNormalizer.normalizeForComparison(rawNumber).ifBlank { rawNumber }
@@ -75,7 +79,7 @@ class VozInCallService : InCallService() {
                 (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q && details?.callDirection == Call.Details.DIRECTION_INCOMING)
 
         // Canonical ID shared between CallManager and CallSessionController
-        val callId = rawNumber.ifBlank { UUID.randomUUID().toString() }
+        val callId = UUID.randomUUID().toString()
 
         TelecomDiagnosticLogger.logCallAdded(call, isIncoming)
 
@@ -115,7 +119,7 @@ class VozInCallService : InCallService() {
         updateCallNotification(callId, callerTitle, isIncoming, isRinging = (call.state == Call.STATE_RINGING))
 
         // Listen for call state transitions on this call
-        call.registerCallback(object : Call.Callback() {
+        val notificationCallback = object : Call.Callback() {
             override fun onStateChanged(targetCall: Call, newState: Int) {
                 val isRingingNow = (newState == Call.STATE_RINGING)
                 val isIncomingNow = (newState == Call.STATE_RINGING) ||
@@ -137,27 +141,28 @@ class VozInCallService : InCallService() {
                         isIncoming
                 updateCallNotification(callId, updatedDisplay, isIncomingNow, isRinging = isRingingNow)
             }
-        })
+        }
+        notificationCallbacks[call] = notificationCallback
+        call.registerCallback(notificationCallback)
 
         // Check if floating overlay is permitted and enabled (compact banner over other apps)
         checkAndLaunchOverlay()
 
-        // Launch full-screen in-call UI activity (granted when device is locked or as allowed by policy)
-        val intent = Intent(this, InCallActivity::class.java).apply {
-            addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_SINGLE_TOP)
-        }
-        try {
-            startActivity(intent)
-        } catch (e: Exception) {
-            // Android 10+ background activity start may be restricted while device is unlocked;
-            // High-priority notification with CallStyle and fullScreenIntent provides the heads-up banner.
-            Log.i(TAG, "Direct background startActivity bypassed by Android policy; fullScreenIntent will handle UI")
+        // An unlocked user may be working in another app: never launch over it.
+        if (CallPresentationPolicy.shouldUseFullScreen(this)) {
+            val intent = Intent(this, InCallActivity::class.java).apply {
+                addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_SINGLE_TOP)
+            }
+            try { startActivity(intent) } catch (_: Exception) {
+                // Eligible full-screen notification remains the platform fallback.
+            }
         }
     }
 
     override fun onCallRemoved(call: Call) {
         super.onCallRemoved(call)
-        TelecomDiagnosticLogger.logCallRemoved(call.toString(), CallSessionController.mapSystemState(call).name)
+        notificationCallbacks.remove(call)?.let { call.unregisterCallback(it) }
+        TelecomDiagnosticLogger.logCallRemoved("redacted", CallSessionController.mapSystemState(call).name)
         CallManager.onCallRemoved(call)
         CallSessionController.unregisterCall(call)
 
@@ -174,17 +179,22 @@ class VozInCallService : InCallService() {
     }
 
     override fun onDestroy() {
+        notificationCallbacks.forEach { (call, callback) -> call.unregisterCallback(callback) }
+        notificationCallbacks.clear()
+        CallAudioRecorder.stopRecording()
         CallManager.detachInCallService(this)
         CallSessionController.detachService(this)
         cancelCallNotification()
         VozCallOverlayService.stop(this)
+        database?.close()
+        proximityRouter?.stop()
         serviceScope.cancel()
         super.onDestroy()
     }
 
     private fun checkAndLaunchOverlay() {
         val prefs = preferencesRepository?.loadPreferences()
-        if (prefs?.floatingIslandOverlayEnabled == true && Settings.canDrawOverlays(this)) {
+        if (!CallPresentationPolicy.fullScreenVisible && !CallPresentationPolicy.mainVisible && prefs?.floatingIslandOverlayEnabled == true && Settings.canDrawOverlays(this)) {
             VozCallOverlayService.startIfPermitted(this)
         }
     }
@@ -287,7 +297,9 @@ class VozInCallService : InCallService() {
 
         if (isRinging) {
             // Heads-up notification trigger when user is inside other apps or device is locked
-            builder.setFullScreenIntent(fullScreenPending, true)
+            if (CallPresentationPolicy.shouldUseFullScreen(this)) {
+                builder.setFullScreenIntent(fullScreenPending, true)
+            }
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
                 // CallStyle handles the Answer and Decline action buttons natively
                 builder.setStyle(

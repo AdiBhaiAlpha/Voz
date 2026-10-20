@@ -70,6 +70,14 @@ object T9AndBanglaMatcher {
         phoneNumbers: List<String>,
         rawQuery: String
     ): MatchScore {
+        if (VozAddress.isVoz(rawQuery)) {
+            val address = VozAddress.normalize(rawQuery)
+            val matched = address != null && phoneNumbers.any {
+                VozAddress.isVoz(it) && VozAddress.normalize(it) == address && VozAddress.isComplete(it)
+            }
+            return MatchScore(matched, if (matched) MatchKind.NUMBER_EXACT else MatchKind.NONE,
+                if (matched) 2 else Int.MAX_VALUE)
+        }
         val query = rawQuery.trim()
         if (query.isEmpty()) {
             return MatchScore(matched = true, kind = MatchKind.NONE, rank = 100)

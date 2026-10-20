@@ -207,4 +207,32 @@
     <string name="truecaller_active_title">VOZ Protected Call</string>
     <string name="truecaller_swipe_to_answer">Tap to Answer</string>
     <string name="truecaller_tap_to_decline">Tap to Decline</string>
+
+    <string name="contacts_favorites">Favorites</string>
+    <string name="contacts_no_matches">No matching contacts</string>
+    <string name="contacts_favorites_hint">Star contacts in their detail card to see them here.</string>
+    <string name="contacts_search_hint">Try another name or phone number.</string>
+    <string name="calling_availability_title">Calling availability</string>
+    <string name="calling_availability_body">Calls use your SIM and carrier plan. Online calling and cloud accounts are not available in this version. Notes, favorites and blocklists stay on this device.</string>
+    <string name="clear_demo_profile">Clear old demo profile</string>
+    <string name="delete_record_title">Delete this call?</string>
+    <string name="delete_record_body">This permanently removes this entry from the system call log.</string>
+    <string name="delete_record_action">Delete</string>
+    <string name="voz_invalid_address">Enter a VOZ ID with seven digits, for example VOZ-302-8671.</string>
+    <string name="voz_name_required">Set your display name in Tools → VOZ profile first. Online service is not yet available.</string>
+    <string name="voz_service_unavailable">VOZ ID detected. Online calling is not connected to a service yet. No SIM call was placed.</string>
+    <string name="voz_name_error">Use 2–50 characters with at least one letter or number.</string>
+    <string name="voz_name_saved">Display name saved on this device. Caller ID registration requires the online service.</string>
+    <string name="voz_online_call">VOZ online call</string>
+    <string name="voz_cellular_mode">SIM call</string>
+    <string name="voz_address_detected">VOZ Caller ID • internet call</string>
+    <string name="voz_address_hint">Enter 7 digits after VOZ • e.g. VOZ-302-8671</string>
+    <string name="voz_profile_title">VOZ profile • local draft</string>
+    <string name="voz_display_name">Display name (required)</string>
+    <string name="voz_save_name">Save display name</string>
+    <string name="voz_registration_pending">A display name is required before Caller ID activation. Saving a name does not register a callable ID. Server registration and online calling are not available in this build.</string>
+    <string name="voz_online_title">VOZ online</string>
+    <string name="voz_online_subtitle">Register a Caller ID or sign in to make internet calls.</string>
+    <string name="voz_endpoint_missing">Online service is not configured in this build.</string>
+    <string name="voz_open_online">Open VOZ online</string>
 </resources>

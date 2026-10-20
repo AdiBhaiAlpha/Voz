@@ -49,6 +49,7 @@ import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -78,19 +79,18 @@ fun ToolsScreen(
     onLanguageChange: (String) -> Unit,
     onHapticChange: (Boolean) -> Unit,
     onSoundChange: (Boolean) -> Unit,
+    onAutoSpeakerChange: (Boolean) -> Unit,
     onConfirmBeforeCallChange: (Boolean) -> Unit,
     onPreferredSimChange: (String) -> Unit,
     onBlockNumber: (rawNumber: String, reason: String) -> Unit,
     onUnblockNumber: (normalizedNumber: String) -> Unit,
     onCompleteReminder: (Long) -> Unit,
     onDeleteReminder: (Long) -> Unit,
-    onLoginVozAccount: (String) -> Unit,
     onLogoutVozAccount: () -> Unit,
     onToggleFloatingOverlay: (Boolean) -> Unit,
     modifier: Modifier = Modifier
 ) {
     var showAddBlockDialog by remember { mutableStateOf(false) }
-    var inputVozName by remember { mutableStateOf("") }
     val context = LocalContext.current
 
     LazyColumn(
@@ -153,125 +153,33 @@ fun ToolsScreen(
             }
         }
 
-        // VOZ Free Online Calling & Caller ID Card
         item {
-            Card(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .testTag("voz_online_calling_card"),
-                colors = CardDefaults.cardColors(
-                    containerColor = if (uiState.preferences.isVozAccountLoggedIn) Color(0xFF0F1E16) else MaterialTheme.colorScheme.surfaceVariant
-                ),
-                shape = RoundedCornerShape(16.dp)
-            ) {
+            Card(modifier = Modifier.fillMaxWidth().testTag("voz_online_calling_card")) {
                 Column(modifier = Modifier.padding(16.dp)) {
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.SpaceBetween
-                    ) {
-                        Row(verticalAlignment = Alignment.CenterVertically) {
-                            Icon(
-                                imageVector = Icons.Default.Cloud,
-                                contentDescription = null,
-                                tint = if (uiState.preferences.isVozAccountLoggedIn) Color(0xFFA3E635) else MaterialTheme.colorScheme.primary
-                            )
-                            Spacer(modifier = Modifier.width(8.dp))
-                            Text(
-                                text = "VOZ Free Online Calling & Caller ID",
-                                style = MaterialTheme.typography.titleMedium,
-                                fontWeight = FontWeight.Bold,
-                                color = if (uiState.preferences.isVozAccountLoggedIn) Color.White else MaterialTheme.colorScheme.onSurface
-                            )
-                        }
+                    Text(stringResource(R.string.voz_online_title), style = MaterialTheme.typography.titleMedium)
+                    Spacer(modifier = Modifier.height(8.dp))
+                    Text(stringResource(if (com.example.BuildConfig.VOZ_SERVICE_URL.isEmpty())
+                        R.string.voz_endpoint_missing else R.string.voz_online_subtitle),
+                        style = MaterialTheme.typography.bodyMedium)
+                    Spacer(modifier = Modifier.height(12.dp))
+                    Button(onClick = { com.example.telecom.VozOnlineActivity.open(context) },
+                        enabled = com.example.BuildConfig.VOZ_SERVICE_URL.isNotEmpty()) {
+                        Text(stringResource(R.string.voz_open_online))
                     }
-
-                    Spacer(modifier = Modifier.height(6.dp))
-
-                    if (uiState.preferences.isVozAccountLoggedIn) {
-                        Text(
-                            text = "Connected as ${uiState.preferences.vozAccountName}. You can place and receive free online HD voice calls with any VOZ user.",
-                            style = MaterialTheme.typography.bodySmall,
-                            color = Color.White.copy(alpha = 0.8f)
-                        )
-
-                        Spacer(modifier = Modifier.height(10.dp))
-
-                        Row(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .background(Color(0xFF0A120D), RoundedCornerShape(10.dp))
-                                .padding(horizontal = 12.dp, vertical = 8.dp),
-                            verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.SpaceBetween
-                        ) {
-                            Column {
-                                Text(
-                                    text = "Your VOZ Caller ID",
-                                    fontSize = 11.sp,
-                                    color = Color(0xFFA3E635)
-                                )
-                                Text(
-                                    text = uiState.preferences.vozCallerId,
-                                    fontSize = 15.sp,
-                                    fontFamily = FontFamily.Monospace,
-                                    fontWeight = FontWeight.Bold,
-                                    color = Color.White
-                                )
-                            }
-                            IconButton(onClick = {
-                                val cm = context.getSystemService(Context.CLIPBOARD_SERVICE) as? ClipboardManager
-                                val clip = ClipData.newPlainText("VOZ Caller ID", uiState.preferences.vozCallerId)
-                                cm?.setPrimaryClip(clip)
-                            }) {
-                                Icon(
-                                    imageVector = Icons.Default.ContentCopy,
-                                    contentDescription = "Copy VOZ Caller ID",
-                                    tint = Color(0xFFA3E635)
-                                )
-                            }
-                        }
-
-                        Spacer(modifier = Modifier.height(10.dp))
-
-                        OutlinedButton(
-                            onClick = onLogoutVozAccount,
-                            modifier = Modifier.fillMaxWidth()
-                        ) {
-                            Text("Sign Out / Reset Caller ID")
-                        }
-                    } else {
-                        Text(
-                            text = "Activate your VOZ Caller ID to enable free VOZ-to-VOZ HD calling over Wi-Fi and mobile data.",
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
-                        )
-
-                        Spacer(modifier = Modifier.height(10.dp))
-
-                        OutlinedTextField(
-                            value = inputVozName,
-                            onValueChange = { inputVozName = it },
-                            label = { Text("Your Display Name") },
-                            placeholder = { Text("e.g., Alex / Rahim") },
-                            modifier = Modifier.fillMaxWidth(),
-                            singleLine = true
-                        )
-
-                        Spacer(modifier = Modifier.height(10.dp))
-
-                        Button(
-                            onClick = {
-                                onLoginVozAccount(inputVozName)
-                                inputVozName = ""
-                            },
-                            colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFA3E635)),
-                            modifier = Modifier.fillMaxWidth()
-                        ) {
-                            Text("Activate Free VOZ Caller ID", color = Color.Black, fontWeight = FontWeight.Bold)
-                        }
+                    if (uiState.preferences.isVozAccountLoggedIn || uiState.preferences.vozAccountName.isNotBlank()) {
+                        TextButton(onClick = onLogoutVozAccount) { Text(stringResource(R.string.clear_demo_profile)) }
                     }
                 }
+            }
+        }
+
+        item {
+            Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                Column(Modifier.weight(1f)) {
+                    Text("Auto speaker", style = MaterialTheme.typography.titleMedium)
+                    Text("Away from ear: speaker. Headsets stay unchanged.", style = MaterialTheme.typography.bodySmall)
+                }
+                Switch(checked = uiState.preferences.autoSpeakerEnabled, onCheckedChange = onAutoSpeakerChange)
             }
         }
 

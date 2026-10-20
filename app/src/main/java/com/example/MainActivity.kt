@@ -1,5 +1,7 @@
 package com.example
 
+import androidx.compose.ui.unit.dp
+
 import android.content.Intent
 import android.net.Uri
 import android.os.Build
@@ -79,7 +81,19 @@ class MainActivity : ComponentActivity() {
 
     override fun onResume() {
         super.onResume()
+        com.example.telecom.CallPresentationPolicy.mainVisible = true
+        com.example.telecom.VozCallOverlayService.stop(this)
         viewModel.refreshPermissionsAndSystemData()
+    }
+
+    override fun onStop() {
+        com.example.telecom.CallPresentationPolicy.mainVisible = false
+        super.onStop()
+        if (!com.example.telecom.CallPresentationPolicy.fullScreenVisible &&
+            CallSessionController.activeCalls.value.any { it.state != CallLifecycleState.DISCONNECTED } &&
+            viewModel.preferencesRepository.loadPreferences().floatingIslandOverlayEnabled) {
+            com.example.telecom.VozCallOverlayService.startIfPermitted(this)
+        }
     }
 
     private fun handleDialIntent(intent: Intent?) {
@@ -109,20 +123,6 @@ fun VozAppRoot(
     val activeCall = ringingCall ?: activeCalls.firstOrNull()
     val snackbarHostState = remember { SnackbarHostState() }
     val context = LocalContext.current
-
-    // When a real incoming call arrives while VOZ is in the foreground, immediately display the full-screen UI
-    LaunchedEffect(ringingCall?.callId) {
-        if (ringingCall != null) {
-            val intent = Intent(context, InCallActivity::class.java).apply {
-                flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_SINGLE_TOP
-            }
-            try {
-                context.startActivity(intent)
-            } catch (e: Exception) {
-                Log.w("MainActivity", "Failed to launch InCallActivity from foreground", e)
-            }
-        }
-    }
 
     // Launcher for RoleManager.ROLE_DIALER
     val dialerRoleLauncher = rememberLauncherForActivityResult(
@@ -269,6 +269,7 @@ fun VozAppRoot(
                 VozDestination.CONTACTS -> ContactsScreen(
                     uiState = uiState,
                     onSearchQueryChange = { viewModel.onContactsSearchQueryChange(it) },
+                    onFavoritesOnlyChange = { viewModel.setFavoritesOnly(it) },
                     onContactClick = { viewModel.openDetailForContact(it) },
                     onPlaceCall = { rawNumber, name ->
                         viewModel.placeRealCall(rawNumber, name)
@@ -296,13 +297,13 @@ fun VozAppRoot(
                     onLanguageChange = { viewModel.setLanguageCode(it) },
                     onHapticChange = { viewModel.setHapticFeedback(it) },
                     onSoundChange = { viewModel.setDialpadSound(it) },
+                    onAutoSpeakerChange = { viewModel.preferencesRepository.setAutoSpeaker(it) },
                     onConfirmBeforeCallChange = { viewModel.setConfirmBeforeCall(it) },
                     onPreferredSimChange = { viewModel.setPreferredSimId(it) },
                     onBlockNumber = { num, reason -> viewModel.blockNumber(num, reason) },
                     onUnblockNumber = { viewModel.unblockNumber(it) },
                     onCompleteReminder = { viewModel.completeReminder(it) },
                     onDeleteReminder = { viewModel.deleteReminder(it) },
-                    onLoginVozAccount = { viewModel.loginVozAccount(it) },
                     onLogoutVozAccount = { viewModel.logoutVozAccount() },
                     onToggleFloatingOverlay = { viewModel.setFloatingIslandOverlayEnabled(it) }
                 )
@@ -314,6 +315,7 @@ fun VozAppRoot(
                     modifier = Modifier
                         .fillMaxWidth()
                         .statusBarsPadding()
+                        .padding(top = 12.dp, start = 24.dp, end = 24.dp)
                         .zIndex(100f),
                     contentAlignment = Alignment.TopCenter
                 ) {
@@ -384,8 +386,7 @@ fun VozAppRoot(
                 },
                 onDeleteRecord = {
                     viewModel.closeDetailSheet()
-                    // Re-load call history after deleting
-                    viewModel.loadCallHistory()
+                    viewModel.deleteCallRecord(detailTarget.recordId)
                 }
             )
         }
@@ -398,6 +399,7 @@ fun VozAppRoot(
                     viewModel.placeRealCall(
                         rawNumber = conf.rawNumber,
                         displayName = conf.displayName,
+                        explicitSimId = conf.explicitSimId,
                         bypassConfirmation = true
                     )
                 },
@@ -413,7 +415,8 @@ fun VozAppRoot(
                     viewModel.dismissSimSelection()
                     viewModel.placeRealCall(
                         rawNumber = selection.rawNumber,
-                        explicitSimId = simId
+                        explicitSimId = simId,
+                        bypassConfirmation = true
                     )
                 },
                 onDismiss = { viewModel.dismissSimSelection() }

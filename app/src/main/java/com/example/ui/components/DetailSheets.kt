@@ -351,7 +351,24 @@ fun CallRecordDetailBottomSheet(
     onDeleteRecord: () -> Unit
 ) {
     val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
-    var note by remember { mutableStateOf(detail.note ?: "") }
+    var note by remember(detail.recordId) { mutableStateOf(detail.note ?: "") }
+    var confirmDelete by remember(detail.recordId) { mutableStateOf(false) }
+
+    if (confirmDelete) {
+        AlertDialog(
+            onDismissRequest = { confirmDelete = false },
+            title = { Text(stringResource(R.string.delete_record_title)) },
+            text = { Text(stringResource(R.string.delete_record_body)) },
+            confirmButton = {
+                TextButton(onClick = { confirmDelete = false; onDeleteRecord() }) {
+                    Text(stringResource(R.string.delete_record_action))
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { confirmDelete = false }) { Text(stringResource(R.string.cancel)) }
+            }
+        )
+    }
 
     ModalBottomSheet(
         onDismissRequest = onDismiss,
@@ -421,7 +438,7 @@ fun CallRecordDetailBottomSheet(
                 }
 
                 TextButton(
-                    onClick = onDeleteRecord,
+                    onClick = { confirmDelete = true },
                     colors = ButtonDefaults.textButtonColors(contentColor = MaterialTheme.colorScheme.error)
                 ) {
                     Icon(Icons.Filled.Delete, contentDescription = null, modifier = Modifier.size(16.dp))

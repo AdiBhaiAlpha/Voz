@@ -13,6 +13,7 @@ enum class ThemeMode {
 }
 
 data class VozUserPreferences(
+    val autoSpeakerEnabled: Boolean = false,
     val themeMode: ThemeMode = ThemeMode.SYSTEM,
     val languageCode: String = "en", // "en" or "bn"
     val hapticFeedbackEnabled: Boolean = true,
@@ -47,6 +48,7 @@ class UserPreferencesRepository(context: Context) {
         val themeStr = prefs.getString("theme_mode", ThemeMode.SYSTEM.name) ?: ThemeMode.SYSTEM.name
         val theme = runCatching { ThemeMode.valueOf(themeStr) }.getOrDefault(ThemeMode.SYSTEM)
         return VozUserPreferences(
+            autoSpeakerEnabled = prefs.getBoolean("auto_speaker", false),
             themeMode = theme,
             languageCode = prefs.getString("language_code", "en") ?: "en",
             hapticFeedbackEnabled = prefs.getBoolean("haptic_feedback", true),
@@ -61,6 +63,8 @@ class UserPreferencesRepository(context: Context) {
             floatingIslandOverlayEnabled = prefs.getBoolean("floating_island_overlay", true)
         )
     }
+
+    fun setAutoSpeaker(enabled: Boolean) { prefs.edit().putBoolean("auto_speaker", enabled).apply() }
 
     fun setThemeMode(mode: ThemeMode) {
         prefs.edit().putString("theme_mode", mode.name).apply()
@@ -94,11 +98,13 @@ class UserPreferencesRepository(context: Context) {
         prefs.edit().putBoolean("confirm_before_call", enabled).apply()
     }
 
-    fun loginVozAccount(name: String, callerId: String) {
+    // This is a local profile draft, not server registration or a callable identity.
+    fun saveVozDisplayName(name: String) {
+        require(com.example.domain.VozDisplayName.isValid(name))
         prefs.edit()
-            .putBoolean("voz_account_logged_in", true)
-            .putString("voz_account_name", name)
-            .putString("voz_caller_id", callerId)
+            .putBoolean("voz_account_logged_in", false)
+            .putString("voz_account_name", com.example.domain.VozDisplayName.clean(name))
+            .remove("voz_caller_id")
             .apply()
     }
 

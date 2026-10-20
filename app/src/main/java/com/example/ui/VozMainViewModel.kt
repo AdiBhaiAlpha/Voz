@@ -17,6 +17,8 @@ import com.example.domain.CallLogFilter
 import com.example.domain.CallRecord
 import com.example.domain.CallType
 import com.example.domain.ContactItem
+import com.example.domain.VozAddress
+import com.example.domain.VozDisplayName
 import com.example.domain.PhoneNormalizer
 import com.example.domain.T9AndBanglaMatcher
 import com.example.telecom.CallInitiationOutcome
@@ -27,6 +29,7 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 
@@ -74,10 +77,13 @@ class VozMainViewModel(application: Application) : AndroidViewModel(application)
             baseState.homeSearchOrDialInput
         }
 
+        val eligibleContacts = enrichedContacts.filter {
+            !baseState.favoritesOnly || baseState.currentDestination != VozDestination.CONTACTS || it.isFavorite
+        }
         val filteredContacts = if (query.isBlank()) {
-            enrichedContacts
+            eligibleContacts
         } else {
-            enrichedContacts
+            eligibleContacts
                 .map { contact ->
                     val phones = contact.numbers.map { it.rawNumber }
                     val score = T9AndBanglaMatcher.evaluateContactMatch(contact.displayName, phones, query)
@@ -119,7 +125,24 @@ class VozMainViewModel(application: Application) : AndroidViewModel(application)
             matchesFilter && matchesQuery
         }
 
+        val refreshedDetail = when (val target = baseState.detailSheetTarget) {
+            is DetailSheetTarget.Contact -> DetailSheetTarget.Contact(
+                enrichedContacts.firstOrNull { it.contactId == target.contact.contactId } ?: target.contact
+            )
+            is DetailSheetTarget.CallRecordDetail -> {
+                val assist = assistMap[target.normalizedNumber]
+                target.copy(
+                    note = assist?.note,
+                    customLabel = assist?.customLabel,
+                    isFavorite = assist?.isFavorite ?: false,
+                    isImportant = assist?.isImportant ?: false,
+                    isBlocked = target.normalizedNumber in blockedNumbersSet
+                )
+            }
+            null -> null
+        }
         baseState.copy(
+            detailSheetTarget = refreshedDetail,
             preferences = prefs,
             allContacts = enrichedContacts,
             filteredContacts = filteredContacts,
@@ -160,7 +183,7 @@ class VozMainViewModel(application: Application) : AndroidViewModel(application)
         val isScreening = telecomDialerManager.isCallScreeningRoleHeld()
         val sims = telecomDialerManager.getAvailableSimAccounts()
 
-        _internalState.value = _internalState.value.copy(
+        _internalState.update { it.copy(
             hasContactsPermission = hasContacts,
             hasCallLogPermission = hasCallLog,
             hasWriteCallLogPermission = hasWriteLog,
@@ -168,7 +191,12 @@ class VozMainViewModel(application: Application) : AndroidViewModel(application)
             isDefaultDialer = isDefault,
             isCallScreeningRoleHeld = isScreening,
             availableSims = sims
-        )
+        ) }
+
+        _internalState.update { it.copy(
+            allContacts = if (hasContacts) it.allContacts else emptyList(),
+            groupedCalls = if (hasCallLog) it.groupedCalls else emptyList()
+        ) }
 
         if (hasContacts) {
             loadContacts()
@@ -180,22 +208,22 @@ class VozMainViewModel(application: Application) : AndroidViewModel(application)
 
     fun loadContacts() {
         viewModelScope.launch(Dispatchers.IO) {
-            _internalState.value = _internalState.value.copy(isLoadingContacts = true)
+            _internalState.update { it.copy(isLoadingContacts = true) }
             when (val result = contactsRepository.loadAuthorizedContacts()) {
                 is ContactsLoadResult.Success -> {
-                    _internalState.value = _internalState.value.copy(
+                    _internalState.update { it.copy(
                         allContacts = result.contacts,
                         isLoadingContacts = false
-                    )
+                    ) }
                 }
                 is ContactsLoadResult.Error -> {
-                    _internalState.value = _internalState.value.copy(
+                    _internalState.update { it.copy(
                         isLoadingContacts = false,
                         feedbackMessage = result.message
-                    )
+                    ) }
                 }
                 is ContactsLoadResult.PermissionDenied -> {
-                    _internalState.value = _internalState.value.copy(isLoadingContacts = false)
+                    _internalState.update { it.copy(isLoadingContacts = false) }
                 }
             }
         }
@@ -203,66 +231,80 @@ class VozMainViewModel(application: Application) : AndroidViewModel(application)
 
     fun loadCallHistory() {
         viewModelScope.launch(Dispatchers.IO) {
-            _internalState.value = _internalState.value.copy(isLoadingCallHistory = true)
+            _internalState.update { it.copy(isLoadingCallHistory = true) }
             when (val result = callLogRepository.loadSystemCallHistory()) {
                 is CallLogLoadResult.Success -> {
                     val grouped = CallHistoryGrouper.groupCallRecords(result.records)
-                    _internalState.value = _internalState.value.copy(
+                    _internalState.update { it.copy(
                         groupedCalls = grouped,
                         isLoadingCallHistory = false
-                    )
+                    ) }
                 }
                 is CallLogLoadResult.Error -> {
-                    _internalState.value = _internalState.value.copy(
+                    _internalState.update { it.copy(
                         isLoadingCallHistory = false,
                         feedbackMessage = result.message
-                    )
+                    ) }
                 }
                 is CallLogLoadResult.PermissionDenied -> {
-                    _internalState.value = _internalState.value.copy(isLoadingCallHistory = false)
+                    _internalState.update { it.copy(isLoadingCallHistory = false) }
                 }
             }
         }
     }
 
+    fun setFavoritesOnly(enabled: Boolean) {
+        _internalState.update { it.copy(favoritesOnly = enabled) }
+    }
+
+    override fun onCleared() {
+        database.close()
+        super.onCleared()
+    }
+
     fun selectDestination(dest: VozDestination) {
-        _internalState.value = _internalState.value.copy(currentDestination = dest)
+        _internalState.update { it.copy(currentDestination = dest) }
     }
 
     fun setDialpadVisible(visible: Boolean) {
-        _internalState.value = _internalState.value.copy(isDialpadVisible = visible)
+        _internalState.update { it.copy(isDialpadVisible = visible) }
     }
 
     fun onHomeSearchOrDialChange(input: String) {
-        _internalState.value = _internalState.value.copy(homeSearchOrDialInput = input)
+        val value = if (VozAddress.isVoz(input)) VozAddress.normalize(input) ?: input else input
+        _internalState.update { it.copy(homeSearchOrDialInput = value) }
     }
 
     fun onDialpadDigitPressed(digit: Char) {
-        val current = _internalState.value.homeSearchOrDialInput
-        _internalState.value = _internalState.value.copy(homeSearchOrDialInput = current + digit)
+        _internalState.update {
+            val current = it.homeSearchOrDialInput
+            it.copy(homeSearchOrDialInput = if (VozAddress.isVoz(current))
+                VozAddress.append(current, digit) else current + digit)
+        }
     }
 
     fun onDialpadBackspace() {
-        val current = _internalState.value.homeSearchOrDialInput
-        if (current.isNotEmpty()) {
-            _internalState.value = _internalState.value.copy(homeSearchOrDialInput = current.dropLast(1))
+        _internalState.update {
+            val current = it.homeSearchOrDialInput
+            it.copy(homeSearchOrDialInput = if (VozAddress.isVoz(current))
+                VozAddress.backspace(current) else current.dropLast(1))
         }
     }
 
     fun onDialpadClearAll() {
-        _internalState.value = _internalState.value.copy(homeSearchOrDialInput = "")
+        _internalState.update { it.copy(homeSearchOrDialInput = "") }
     }
 
     fun onContactsSearchQueryChange(query: String) {
-        _internalState.value = _internalState.value.copy(contactsSearchQuery = query)
+        _internalState.update { it.copy(contactsSearchQuery = query) }
     }
 
     fun onActivitySearchQueryChange(query: String) {
-        _internalState.value = _internalState.value.copy(activitySearchQuery = query)
+        _internalState.update { it.copy(activitySearchQuery = query) }
     }
 
     fun onActivityFilterChange(filter: CallLogFilter) {
-        _internalState.value = _internalState.value.copy(activityFilter = filter)
+        _internalState.update { it.copy(activityFilter = filter) }
     }
 
     /**
@@ -275,6 +317,15 @@ class VozMainViewModel(application: Application) : AndroidViewModel(application)
         explicitSimId: String? = null,
         bypassConfirmation: Boolean = false
     ) {
+        // Route before cellular sanitization; a VOZ ID must NEVER become a carrier number.
+        if (VozAddress.isVoz(rawNumber)) {
+            if (!VozAddress.isComplete(rawNumber)) {
+                showFeedback(getApplication<Application>().getString(com.example.R.string.voz_invalid_address))
+            } else if (!com.example.telecom.VozOnlineActivity.open(getApplication(), VozAddress.normalize(rawNumber)!!)) {
+                showFeedback(getApplication<Application>().getString(com.example.R.string.voz_service_unavailable))
+            }
+            return
+        }
         val sanitized = PhoneNormalizer.sanitizeDialInput(rawNumber)
         if (!PhoneNormalizer.isValidDialableNumber(sanitized)) {
             showFeedback("Please enter a valid phone number.")
@@ -284,13 +335,13 @@ class VozMainViewModel(application: Application) : AndroidViewModel(application)
         val state = uiState.value
         if (!bypassConfirmation && state.preferences.confirmBeforeCallEnabled) {
             val name = displayName?.ifBlank { sanitized } ?: sanitized
-            _internalState.value = _internalState.value.copy(
-                pendingConfirmation = PendingCallConfirmation(name, sanitized)
-            )
+            _internalState.update { it.copy(
+                pendingConfirmation = PendingCallConfirmation(name, sanitized, explicitSimId)
+            ) }
             return
         }
 
-        _internalState.value = _internalState.value.copy(pendingConfirmation = null)
+        _internalState.update { it.copy(pendingConfirmation = null) }
 
         val outcome = CallManager.placeRealCall(
             context = getApplication(),
@@ -304,9 +355,9 @@ class VozMainViewModel(application: Application) : AndroidViewModel(application)
                 showFeedback("Placing cellular call to $target…")
             }
             is CallInitiationOutcome.RequiresSimSelection -> {
-                _internalState.value = _internalState.value.copy(
+                _internalState.update { it.copy(
                     pendingSimSelection = PendingSimSelection(outcome.sanitizedNumber, outcome.availableSims)
-                )
+                ) }
             }
             is CallInitiationOutcome.Error -> {
                 showFeedback(outcome.reason)
@@ -315,35 +366,36 @@ class VozMainViewModel(application: Application) : AndroidViewModel(application)
     }
 
     fun dismissCallConfirmation() {
-        _internalState.value = _internalState.value.copy(pendingConfirmation = null)
+        _internalState.update { it.copy(pendingConfirmation = null) }
     }
 
     fun dismissSimSelection() {
-        _internalState.value = _internalState.value.copy(pendingSimSelection = null)
+        _internalState.update { it.copy(pendingSimSelection = null) }
     }
 
     fun openDetailForContact(contact: ContactItem) {
-        _internalState.value = _internalState.value.copy(detailSheetTarget = DetailSheetTarget.Contact(contact))
+        _internalState.update { it.copy(detailSheetTarget = DetailSheetTarget.Contact(contact)) }
     }
 
     fun openDetailForCallRecord(record: CallRecord) {
-        _internalState.value = _internalState.value.copy(
+        _internalState.update { it.copy(
             detailSheetTarget = DetailSheetTarget.CallRecordDetail(
+                recordId = record.id,
                 rawNumber = record.rawNumber,
                 normalizedNumber = record.normalizedNumber,
                 displayName = record.displayName,
                 photoUri = record.photoUri,
                 note = record.assistNote,
                 customLabel = record.assistLabel,
-                isFavorite = false,
+                isFavorite = uiState.value.assistMap[record.normalizedNumber]?.isFavorite ?: false,
                 isImportant = record.isImportant,
                 isBlocked = record.isBlocked
             )
-        )
+        ) }
     }
 
     fun closeDetailSheet() {
-        _internalState.value = _internalState.value.copy(detailSheetTarget = null)
+        _internalState.update { it.copy(detailSheetTarget = null) }
     }
 
     fun saveCallAssist(
@@ -395,17 +447,17 @@ class VozMainViewModel(application: Application) : AndroidViewModel(application)
 
     fun deleteCallRecord(id: Long) {
         viewModelScope.launch(Dispatchers.IO) {
-            callLogRepository.deleteCallRecordsByIds(listOf(id))
-            loadCallHistory()
-            showFeedback("Record removed.")
+            val deleted = callLogRepository.deleteCallRecordsByIds(listOf(id))
+            if (deleted) loadCallHistory()
+            showFeedback(if (deleted) "Record removed." else "Could not delete record. Check call log permissions and default phone app settings.")
         }
     }
 
     fun clearAllCallHistory() {
         viewModelScope.launch(Dispatchers.IO) {
-            callLogRepository.clearAllCallHistory()
-            loadCallHistory()
-            showFeedback("Call log cleared.")
+            val cleared = callLogRepository.clearAllCallHistory()
+            if (cleared) loadCallHistory()
+            showFeedback(if (cleared) "Call log cleared." else "Could not clear call log. Check call log permissions and default phone app settings.")
         }
     }
 
@@ -441,18 +493,18 @@ class VozMainViewModel(application: Application) : AndroidViewModel(application)
         preferencesRepository.setConfirmBeforeCall(enabled)
     }
 
-    fun loginVozAccount(userName: String) {
-        val cleanName = userName.trim().ifBlank { "VOZ User" }
-        val randomSuffix = (1000..9999).random()
-        val randomPrefix = (100..999).random()
-        val generatedCallerId = "VOZ-$randomPrefix-$randomSuffix"
-        preferencesRepository.loginVozAccount(cleanName, generatedCallerId)
-        showFeedback("VOZ Caller ID activated: $generatedCallerId")
+    fun saveVozDisplayName(userName: String) {
+        if (!VozDisplayName.isValid(userName)) {
+            showFeedback(getApplication<Application>().getString(com.example.R.string.voz_name_error))
+            return
+        }
+        preferencesRepository.saveVozDisplayName(VozDisplayName.clean(userName))
+        showFeedback(getApplication<Application>().getString(com.example.R.string.voz_name_saved))
     }
 
     fun logoutVozAccount() {
         preferencesRepository.logoutVozAccount()
-        showFeedback("Signed out of VOZ Online Calling.")
+        showFeedback("Local demo profile cleared.")
     }
 
     fun setFloatingIslandOverlayEnabled(enabled: Boolean) {
@@ -460,10 +512,10 @@ class VozMainViewModel(application: Application) : AndroidViewModel(application)
     }
 
     fun dismissFeedbackBanner() {
-        _internalState.value = _internalState.value.copy(feedbackMessage = null)
+        _internalState.update { it.copy(feedbackMessage = null) }
     }
 
     fun showFeedback(msg: String) {
-        _internalState.value = _internalState.value.copy(feedbackMessage = msg)
+        _internalState.update { it.copy(feedbackMessage = msg) }
     }
 }

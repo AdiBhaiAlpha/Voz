@@ -1,0 +1,16 @@
+import { database, migrate } from './db.js';
+import { buildApp } from './app.js';
+import { firebasePush } from './push.js';
+const production = process.env.NODE_ENV === 'production';
+if (production && !process.env.PUBLIC_ORIGIN?.startsWith('https://'))
+    throw Error('PUBLIC_ORIGIN must be HTTPS');
+if (!process.env.DATABASE_URL)
+    throw Error('DATABASE_URL required');
+if (production && (!process.env.TURN_SECRET || process.env.TURN_SECRET.length < 32))
+    throw Error('TURN_SECRET must have at least 32 random characters');
+const pool = database(process.env.DATABASE_URL);
+await migrate(pool);
+const { app } = await buildApp({ pool, logger: true, metricsToken: process.env.METRICS_TOKEN, origin: process.env.PUBLIC_ORIGIN, trustProxy: process.env.TRUST_PROXY === '1', turnSecret: process.env.TURN_SECRET || '', turnUrls: (process.env.TURN_URLS || '').split(',').filter(Boolean), stunUrls: (process.env.STUN_URLS || '').split(',').filter(Boolean), push: firebasePush() });
+await app.listen({ host: '0.0.0.0', port: Number(process.env.PORT || 8080) });
+for (const signal of ['SIGTERM', 'SIGINT'])
+    process.on(signal, () => void app.close().then(() => pool.end()));

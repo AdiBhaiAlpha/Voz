@@ -11,6 +11,8 @@ import android.provider.Settings
 import android.util.Log
 import android.view.Gravity
 import android.view.WindowManager
+import androidx.compose.runtime.LaunchedEffect
+import com.example.ui.theme.VOZTheme
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.platform.ComposeView
@@ -43,6 +45,8 @@ class VozCallOverlayService : Service(), LifecycleOwner, SavedStateRegistryOwner
         private const val TAG = "VOZ_OVERLAY"
 
         fun startIfPermitted(context: Context) {
+            if (CallPresentationPolicy.fullScreenVisible || CallPresentationPolicy.mainVisible) return
+            if (!com.example.data.preferences.UserPreferencesRepository(context).loadPreferences().floatingIslandOverlayEnabled) return
             if (Settings.canDrawOverlays(context)) {
                 try {
                     val intent = Intent(context, VozCallOverlayService::class.java)
@@ -90,16 +94,17 @@ class VozCallOverlayService : Service(), LifecycleOwner, SavedStateRegistryOwner
         }
 
         val params = WindowManager.LayoutParams(
-            WindowManager.LayoutParams.MATCH_PARENT,
+            (resources.displayMetrics.widthPixels - (32 * resources.displayMetrics.density).toInt())
+                .coerceAtMost((360 * resources.displayMetrics.density).toInt()),
             WindowManager.LayoutParams.WRAP_CONTENT,
             layoutParamsType,
             WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE or
-                    WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN or
-                    WindowManager.LayoutParams.FLAG_LAYOUT_NO_LIMITS,
+                    WindowManager.LayoutParams.FLAG_NOT_TOUCH_MODAL,
             PixelFormat.TRANSLUCENT
         ).apply {
             gravity = Gravity.TOP or Gravity.CENTER_HORIZONTAL
-            y = 8
+            // Default window bounds already exclude the status bar; add a small gap.
+            y = (12 * resources.displayMetrics.density).toInt()
         }
 
         val composeView = ComposeView(this).apply {
@@ -109,10 +114,10 @@ class VozCallOverlayService : Service(), LifecycleOwner, SavedStateRegistryOwner
             setContent {
                 val activeCalls by CallSessionController.activeCalls.collectAsState()
                 val ringingCall = activeCalls.firstOrNull { it.state == CallLifecycleState.RINGING }
-                val currentCall = ringingCall ?: activeCalls.firstOrNull()
+                val currentCall = ringingCall ?: activeCalls.firstOrNull { it.state != CallLifecycleState.DISCONNECTED && it.state != CallLifecycleState.DISCONNECTING }
 
                 if (currentCall != null) {
-                    DynamicIslandCallPill(
+                    VOZTheme { DynamicIslandCallPill(
                         call = currentCall,
                         onOpenFullScreen = {
                             val intent = Intent(this@VozCallOverlayService, InCallActivity::class.java).apply {
@@ -122,11 +127,10 @@ class VozCallOverlayService : Service(), LifecycleOwner, SavedStateRegistryOwner
                                 startActivity(intent)
                             } catch (_: Exception) {}
                         }
-                    )
+                    ) }
                 } else {
                     // Automatically dismiss overlay when call ends
-                    removeOverlayView()
-                    stopSelf()
+                    LaunchedEffect(Unit) { stopSelf() }
                 }
             }
         }

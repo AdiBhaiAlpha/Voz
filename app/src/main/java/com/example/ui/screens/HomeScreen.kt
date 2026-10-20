@@ -65,6 +65,7 @@ import com.example.domain.CallRecord
 import com.example.domain.CallType
 import com.example.domain.ContactItem
 import com.example.domain.GroupedCallSession
+import com.example.domain.VozAddress
 import com.example.domain.PhoneNormalizer
 import com.example.telecom.CallLifecycleState
 import com.example.telecom.CallManager
@@ -251,7 +252,8 @@ fun HomeScreen(
                     modifier = Modifier.weight(1f),
                     contentPadding = PaddingValues(bottom = if (uiState.isDialpadVisible) 360.dp else 90.dp)
                 ) {
-                    val sanitized = PhoneNormalizer.sanitizeDialInput(uiState.homeSearchOrDialInput)
+                    val isVoz = VozAddress.isVoz(uiState.homeSearchOrDialInput)
+                    val sanitized = if (isVoz) uiState.homeSearchOrDialInput else PhoneNormalizer.sanitizeDialInput(uiState.homeSearchOrDialInput)
                     if (sanitized.isNotEmpty()) {
                         item {
                             Card(
@@ -290,7 +292,7 @@ fun HomeScreen(
                                         Spacer(modifier = Modifier.width(12.dp))
                                         Column {
                                             Text(
-                                                text = "Direct Call",
+                                                text = if (isVoz) stringResource(R.string.voz_online_call) else "Direct Call",
                                                 style = MaterialTheme.typography.labelMedium,
                                                 color = MaterialTheme.colorScheme.onPrimaryContainer
                                             )
@@ -477,6 +479,8 @@ fun HomeScreen(
                 isSoundEnabled = uiState.preferences.dialpadSoundEnabled,
                 isHapticEnabled = uiState.preferences.hapticFeedbackEnabled,
                 onDigitPressed = onDigitPressed,
+                onInputChange = onSearchOrDialChange,
+                onEnableVoz = { onSearchOrDialChange(VozAddress.enable(uiState.homeSearchOrDialInput)) },
                 onBackspace = onBackspace,
                 onClearAll = onClearAll,
                 onPlaceCall = { explicitSimId ->

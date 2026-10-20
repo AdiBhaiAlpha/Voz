@@ -34,6 +34,14 @@ class CallManagerTest {
     }
 
     @Test
+    fun vozIdentityNeverReachesCarrierCalling() {
+        val outcome = CallManager.placeRealCall(context, "VOZ-302-8671")
+        assertTrue(outcome is CallInitiationOutcome.Error)
+        assertEquals("VOZ IDs cannot be called over the cellular network.",
+            (outcome as CallInitiationOutcome.Error).reason)
+    }
+
+    @Test
     fun testPhoneNormalizer_sanitizationAndBanglaConversion() {
         // Bengali digits conversion
         val banglaNumber = "০১৭০০১১২২৩৩"
@@ -115,15 +123,15 @@ class CallManagerTest {
     }
 
     @Test
-    fun testVozUserPreferences_storesAccountAndCallerId() {
+    fun testVozUserPreferences_storesDraftWithoutClaimingRegistration() {
         val repo = com.example.data.preferences.UserPreferencesRepository(context)
         assertFalse(repo.loadPreferences().isVozAccountLoggedIn)
 
-        repo.loginVozAccount("Chitron", "VOZ-880-17001")
+        repo.saveVozDisplayName("  Chitron  ")
         val prefs = repo.loadPreferences()
-        assertTrue(prefs.isVozAccountLoggedIn)
+        assertFalse(prefs.isVozAccountLoggedIn)
         assertEquals("Chitron", prefs.vozAccountName)
-        assertEquals("VOZ-880-17001", prefs.vozCallerId)
+        assertEquals("", prefs.vozCallerId)
 
         repo.logoutVozAccount()
         assertFalse(repo.loadPreferences().isVozAccountLoggedIn)

@@ -1,0 +1,9 @@
+# Add a renewable certificate issued for TURN_HOST. Mount read-only, no private key in Git.
+services:
+  turn:
+    environment:
+      TURN_TLS_CERT: /run/turn-tls/fullchain.pem
+      TURN_TLS_KEY: /run/turn-tls/privkey.pem
+      TURN_TLS_PORT: '5349'
+    volumes:
+      - ${TURN_CERT_DIR:?Set absolute TURN_CERT_DIR}:/run/turn-tls:ro

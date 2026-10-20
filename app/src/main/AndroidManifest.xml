@@ -8,7 +8,8 @@
         android:required="false" />
 
     <!-- Least-privilege permissions for Dialer, Contacts, Call History, and In-Call audio/notifications -->
-    <!-- Notice: No INTERNET permission is requested; VOZ is strictly offline-first and private by default -->
+    <!-- Network access is used only by the explicitly opened VOZ online client. -->
+    <uses-permission android:name="android.permission.INTERNET" />
     <uses-permission android:name="android.permission.RECORD_AUDIO" />
     <uses-permission android:name="android.permission.BLUETOOTH_CONNECT" />
     <uses-permission android:name="android.permission.CALL_PHONE" />
@@ -26,8 +27,13 @@
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_PHONE_CALL" />
     <uses-permission android:name="android.permission.SYSTEM_ALERT_WINDOW" />
 
+    <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_MICROPHONE" />
+
     <application
-        android:allowBackup="true"
+        android:name="com.example.online.VozApplication"
+        android:usesCleartextTraffic="false"
+        android:allowBackup="false"
         android:dataExtractionRules="@xml/data_extraction_rules"
         android:fullBackupContent="@xml/backup_rules"
         android:icon="@mipmap/ic_launcher"
@@ -73,6 +79,15 @@
                 <category android:name="android.intent.category.DEFAULT" />
             </intent-filter>
         </activity>
+
+        <activity android:name=".telecom.VozOnlineActivity" android:exported="false" android:launchMode="singleTop" />
+
+        <service android:name="com.example.online.VozMessagingService" android:exported="false">
+            <intent-filter><action android:name="com.google.firebase.MESSAGING_EVENT" /></intent-filter>
+        </service>
+        <service android:name="com.example.online.OnlineCallService" android:exported="false"
+            android:foregroundServiceType="phoneCall|microphone" />
+        <receiver android:name="com.example.online.OnlineActionReceiver" android:exported="false" />
 
         <!-- Dedicated Lock-Screen & Active Call UI Activity -->
         <activity

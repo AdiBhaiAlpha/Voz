@@ -2,14 +2,22 @@ name: Android CI Build
 
 on:
   push:
-    branches: [ "main", "master" ]
+    branches: [ "main", "master", "arena/d7ba82e8-voz" ]
+  workflow_dispatch:
   pull_request:
     branches: [ "main", "master" ]
+
+permissions:
+  contents: read
+concurrency:
+  group: android-${{ github.ref }}
+  cancel-in-progress: true
 
 jobs:
   build:
 
     runs-on: ubuntu-latest
+    timeout-minutes: 25
 
     steps:
     - uses: actions/checkout@v4
@@ -23,14 +31,30 @@ jobs:
     - name: Setup Android SDK
       uses: android-actions/setup-android@v3
 
-    - name: Grant execute permission for gradlew
-      run: chmod +x gradlew
+    - name: Set up Gradle and validate wrapper
+      uses: gradle/actions/setup-gradle@v4
 
-    - name: Build Debug APK
-      run: ./gradlew assembleDebug
+    - name: Compile native Android client
+      run: ./gradlew --no-daemon assembleDebug
+
+    - name: Run JVM tests
+      run: ./gradlew --no-daemon testDebugUnitTest
+
+    - name: Android lint
+      run: ./gradlew --no-daemon lintDebug
+
+    - name: Upload diagnostic reports
+      if: always()
+      uses: actions/upload-artifact@v4
+      with:
+        name: android-reports
+        path: app/build/reports/
+        if-no-files-found: ignore
 
     - name: Upload APK Artifact
+      if: always()
       uses: actions/upload-artifact@v4
       with:
         name: debug-apk
         path: app/build/outputs/apk/debug/app-debug.apk
+        if-no-files-found: ignore

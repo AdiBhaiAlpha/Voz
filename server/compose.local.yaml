@@ -1,0 +1,25 @@
+# Local HTTP API/database verification. Not an Android HTTPS/media deployment.
+services:
+  db:
+    image: postgres:18-bookworm
+    environment:
+      POSTGRES_DB: voz
+      POSTGRES_USER: voz
+      POSTGRES_PASSWORD: local-development-only
+    healthcheck:
+      test: [CMD-SHELL, 'pg_isready -U voz -d voz']
+      interval: 2s
+      timeout: 2s
+      retries: 20
+    volumes: [local-db:/var/lib/postgresql]
+  api:
+    build: .
+    ports: ['127.0.0.1:8080:8080']
+    environment:
+      DATABASE_URL: postgres://voz:local-development-only@db:5432/voz
+      TURN_SECRET: local-test-only-not-for-production-credentials
+      TURN_URLS: turn:127.0.0.1:3478
+    depends_on:
+      db: {condition: service_healthy}
+volumes:
+  local-db:

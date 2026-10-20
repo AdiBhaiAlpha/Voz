@@ -1,6 +1,8 @@
 package com.example.ui.screens
 
 import androidx.compose.foundation.ExperimentalFoundationApi
+import androidx.compose.foundation.horizontalScroll
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -120,9 +122,9 @@ fun ActivityScreen(
 
         Spacer(modifier = Modifier.height(8.dp))
 
-        // Filter Chips Row (All, Missed, Incoming, Outgoing)
+        // Scroll so filters remain reachable on narrow displays and large font sizes.
         Row(
-            modifier = Modifier.fillMaxWidth(),
+            modifier = Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()),
             horizontalArrangement = Arrangement.spacedBy(8.dp)
         ) {
             FilterChip(
