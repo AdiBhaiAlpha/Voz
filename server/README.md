@@ -13,8 +13,10 @@ vulnerabilities in the locked dependencies at verification time.
 
 Native Android registration, encrypted session storage, device registration, audio
 negotiation, reconnect/replay and FCM handling are implemented. Debug assembly and
-JVM tests now pass on authorized hosted GitHub CI; real-device media/push remains
-unverified. No public server, TURN service, Firebase project or two-device call
+24 JVM tests and lint pass on authorized hosted GitHub CI. Registration UI and
+native WebRTC RTP pass on one emulator; six real coturn relay/authentication
+subtests pass on an isolated Docker fixture. Real-device/public media and push
+remain unverified. No public server, TURN service, Firebase project or two-device call
 was fabricated. No owner setup is requested; see the
 [autonomous capability audit](../docs/AUTONOMOUS_DELIVERY.md). See [verification](../docs/ONLINE_VERIFICATION.md).
 

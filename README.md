@@ -23,9 +23,9 @@ references: [server](server/README.md), [API](docs/ONLINE_API.md),
 [operations](docs/ONLINE_OPERATIONS.md). These references are not owner setup tasks.
 
 **Status:** Backend compilation, unit tests and real PostgreSQL integration tests
-pass locally and on authorized GitHub CI. Native Android debug assembly and JVM
-tests have now passed on a real hosted runner; lint/UI results are tracked in the
-verification document. Public deployment, real TURN allocation, FCM receipt and
+pass locally and on authorized GitHub CI. Native Android debug assembly, lint and 24 JVM
+tests pass on a real hosted runner. Registration UI and actual native WebRTC audio
+RTP between two peers on one emulator also pass (2 unskipped tests). Public deployment, real TURN allocation, FCM receipt and
 two-device audio remain blocked/unverified. This is **not production ready**.
 No owner account creation, secret submission or manual deployment is requested.
 

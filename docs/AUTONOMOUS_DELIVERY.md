@@ -19,8 +19,12 @@ started and no third-party account has been created under someone else's identit
   is public. Branch push and Actions run/job/check-annotation reads work.
 - The integration returns HTTP 403 for Actions settings, repository secrets,
   repository variables and webhook listings. This does **not** establish that
-  those resources are empty. Secret values were never requested or displayed.
-- Repository deployment-environment listing returned no environments.
+  those resources are empty. No secret values were returned to this workspace or displayed. A proposed
+  metadata-only workflow-context audit did not execute (`action_required`, no
+  jobs); it was removed rather than bypassing the gate. Hidden credential
+  availability remains unknown.
+- Repository deployment-environment and deployment listings returned no entries;
+  the repository has no configured homepage or Pages deployment.
 - Environment-name/presence inventory found GitHub credentials, but no recognized
   cloud-provider tokens, Firebase configuration, authorized SSH target/key,
   service origin or public TURN configuration. A GitHub token is not a general
@@ -69,8 +73,8 @@ search snippets. Existing authorized durable infrastructure was not discovered.
 
 - Branch push triggers backend build, unit tests, real PostgreSQL integration
   tests and production-dependency audit on a standard public-repository runner.
-- Android branch CI compiles a debug APK, runs JVM tests and lint, and preserves
-  available reports/APK artifacts; permissions are read-only. Compiler failures
+- Android branch CI compiles a debug APK, runs JVM tests/lint plus registration UI
+  and native SDK loopback tests on an emulator, and preserves available artifacts; permissions are read-only. Compiler failures
   are surfaced as API-readable check annotations so they can be investigated
   despite this workspace's inability to follow Actions log-storage redirects.
 - Android CI uses a pinned Ubuntu 24.04 runner with its installed SDK rather than
@@ -79,6 +83,9 @@ search snippets. Existing authorized durable infrastructure was not discovered.
   wires the database, HTTPS proxy, signaling process and short-lived coturn
   authentication. This is deployment automation source, **not an executed public
   deployment**. No production secrets were generated without an authorized target.
+- Real coturn CI now passes UDP/TCP/TLS packet relay, incorrect-secret/expired
+  credential rejection, renewed-credential recovery and a denied private peer.
+  This uses a loopback-only disposable fixture, not public hosting or phone media.
 - Capability checks and their negative/security cases run in the test suite;
   secret values, paths and origin values are not echoed into the report.
 

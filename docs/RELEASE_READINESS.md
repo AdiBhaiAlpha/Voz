@@ -9,8 +9,9 @@ Current authoritative documents:
 
 Earlier SQLite/WebView/foreground-only prototype notes have been superseded by the
 TypeScript/PostgreSQL/native-WebRTC/FCM implementation. That does **not** mean the
-new Android/media path is fully verified. Native debug assembly and JVM tests
-now pass on authorized GitHub CI; actual device media/FCM/relay tests and public
+new Android/media path is fully verified. Native debug assembly/lint, 24 JVM tests,
+2 actual emulator registration/native-RTP cases and 6 isolated real coturn subtests
+now pass on authorized GitHub CI; physical-device media/FCM/public-relay tests and public
 deployment remain blocked. A real CI debug APK artifact exists; it is not a
 configured production release. No deployed server or successful call is fabricated. Review all unchecked gates before a production claim.
 
