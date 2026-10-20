@@ -31,6 +31,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.Backspace
 import androidx.compose.material.icons.filled.Call
 import androidx.compose.material.icons.filled.ContentPaste
+import androidx.compose.material.icons.filled.Bolt
 import androidx.compose.material3.Button
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.ButtonDefaults
@@ -191,19 +192,69 @@ fun SmartDialpad(
 
             Spacer(modifier = Modifier.height(12.dp))
 
-            Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                FilterChip(
-                    selected = !isVoz,
-                    onClick = { if (isVoz) onClearAll() },
-                    label = { Text(stringResource(R.string.voz_cellular_mode)) },
-                    modifier = Modifier.testTag("dialpad_cellular_mode")
-                )
-                FilterChip(
-                    selected = isVoz,
-                    onClick = onEnableVoz,
-                    label = { Text("VOZ") },
-                    modifier = Modifier.testTag("dialpad_voz_mode")
-                )
+            // Mode selector: Cellular SIM vs VOZ ID
+            Surface(
+                shape = RoundedCornerShape(20.dp),
+                color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f),
+                modifier = Modifier.padding(horizontal = 8.dp)
+            ) {
+                Row(
+                    modifier = Modifier.padding(3.dp),
+                    horizontalArrangement = Arrangement.spacedBy(4.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Surface(
+                        onClick = { if (isVoz) onClearAll() },
+                        shape = RoundedCornerShape(16.dp),
+                        color = if (!isVoz) MaterialTheme.colorScheme.primaryContainer else Color.Transparent,
+                        modifier = Modifier.testTag("dialpad_cellular_mode")
+                    ) {
+                        Row(
+                            modifier = Modifier.padding(horizontal = 14.dp, vertical = 6.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(6.dp)
+                        ) {
+                            Icon(
+                                imageVector = Icons.Filled.Call,
+                                contentDescription = null,
+                                modifier = Modifier.size(16.dp),
+                                tint = if (!isVoz) MaterialTheme.colorScheme.onPrimaryContainer else MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                            Text(
+                                text = stringResource(R.string.voz_cellular_mode),
+                                style = MaterialTheme.typography.labelMedium,
+                                fontWeight = if (!isVoz) FontWeight.Bold else FontWeight.Medium,
+                                color = if (!isVoz) MaterialTheme.colorScheme.onPrimaryContainer else MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        }
+                    }
+
+                    Surface(
+                        onClick = onEnableVoz,
+                        shape = RoundedCornerShape(16.dp),
+                        color = if (isVoz) Color(0xFF6750A4) else Color.Transparent,
+                        modifier = Modifier.testTag("dialpad_voz_mode")
+                    ) {
+                        Row(
+                            modifier = Modifier.padding(horizontal = 14.dp, vertical = 6.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(6.dp)
+                        ) {
+                            Icon(
+                                imageVector = Icons.Filled.Bolt,
+                                contentDescription = null,
+                                modifier = Modifier.size(16.dp),
+                                tint = if (isVoz) Color.White else MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                            Text(
+                                text = "VOZ",
+                                style = MaterialTheme.typography.labelMedium,
+                                fontWeight = if (isVoz) FontWeight.Bold else FontWeight.Medium,
+                                color = if (isVoz) Color.White else MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        }
+                    }
+                }
             }
             if (isVoz) {
                 Text(
@@ -354,58 +405,163 @@ fun SmartDialpad(
 
             Spacer(modifier = Modifier.height(14.dp))
 
-            // Bottom Call Trigger(s)
-            if (!isVoz && availableSims.size > 1) {
-                // Multi-SIM quick call buttons
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.SpaceEvenly
-                ) {
-                    for (sim in availableSims.take(2)) {
+            // Bottom Action Row: Standard Carrier Call + Dedicated VOZ Button
+            if (!isVoz) {
+                if (availableSims.size > 1) {
+                    // Multi-SIM quick call buttons + dedicated VOZ button
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        for (sim in availableSims.take(2)) {
+                            Button(
+                                onClick = { onPlaceCall(sim.subscriptionId.toString()) },
+                                enabled = canCall,
+                                modifier = Modifier
+                                    .weight(1f)
+                                    .height(54.dp)
+                                    .testTag("call_button_sim_${sim.slotIndex}"),
+                                colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF2E7D32)),
+                                shape = RoundedCornerShape(27.dp)
+                            ) {
+                                Icon(Icons.Filled.Call, contentDescription = null, modifier = Modifier.size(20.dp))
+                                Spacer(modifier = Modifier.width(4.dp))
+                                Text(
+                                    text = "SIM ${sim.slotIndex + 1}",
+                                    style = MaterialTheme.typography.labelLarge,
+                                    fontWeight = FontWeight.Bold
+                                )
+                            }
+                        }
+
+                        // Dedicated VOZ button right in the dialer action row
                         Button(
-                            onClick = { onPlaceCall(sim.subscriptionId.toString()) },
-                            enabled = canCall,
+                            onClick = onEnableVoz,
                             modifier = Modifier
                                 .weight(1f)
-                                .height(52.dp)
-                                .padding(horizontal = 4.dp)
-                                .testTag("call_button_sim_${sim.slotIndex}"),
-                            colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF2E7D32)),
-                            shape = RoundedCornerShape(26.dp)
+                                .height(54.dp)
+                                .testTag("dialpad_voz_button"),
+                            colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF6750A4)),
+                            shape = RoundedCornerShape(27.dp)
                         ) {
-                            Icon(Icons.Filled.Call, contentDescription = null, modifier = Modifier.size(20.dp))
+                            Icon(Icons.Filled.Bolt, contentDescription = "VOZ", modifier = Modifier.size(20.dp))
+                            Spacer(modifier = Modifier.width(4.dp))
+                            Text(
+                                text = "VOZ",
+                                style = MaterialTheme.typography.labelLarge,
+                                fontWeight = FontWeight.Bold
+                            )
+                        }
+                    }
+                } else {
+                    // Single SIM Call button + Dedicated VOZ Button
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(10.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Button(
+                            onClick = { onPlaceCall(null) },
+                            enabled = canCall,
+                            modifier = Modifier
+                                .weight(1.3f)
+                                .height(56.dp)
+                                .testTag("dialpad_call_button"),
+                            colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF2E7D32)),
+                            shape = RoundedCornerShape(28.dp)
+                        ) {
+                            Icon(
+                                imageVector = Icons.Filled.Call,
+                                contentDescription = stringResource(R.string.dialpad_call_desc),
+                                modifier = Modifier.size(24.dp)
+                            )
+                            Spacer(modifier = Modifier.width(8.dp))
+                            Text(
+                                text = stringResource(R.string.voz_cellular_mode),
+                                style = MaterialTheme.typography.titleMedium,
+                                fontWeight = FontWeight.Bold
+                            )
+                        }
+
+                        // Dedicated VOZ Button right on dialer keyboard
+                        Button(
+                            onClick = onEnableVoz,
+                            modifier = Modifier
+                                .weight(1f)
+                                .height(56.dp)
+                                .testTag("dialpad_voz_button"),
+                            colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF6750A4)),
+                            shape = RoundedCornerShape(28.dp)
+                        ) {
+                            Icon(
+                                imageVector = Icons.Filled.Bolt,
+                                contentDescription = "VOZ",
+                                modifier = Modifier.size(24.dp)
+                            )
                             Spacer(modifier = Modifier.width(6.dp))
                             Text(
-                                text = "SIM ${sim.slotIndex + 1}",
-                                style = MaterialTheme.typography.labelLarge,
+                                text = "VOZ",
+                                style = MaterialTheme.typography.titleMedium,
                                 fontWeight = FontWeight.Bold
                             )
                         }
                     }
                 }
             } else {
-                // Single large call button
-                Button(
-                    onClick = { onPlaceCall(null) },
-                    enabled = canCall,
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .height(56.dp)
-                        .testTag("dialpad_call_button"),
-                    colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF2E7D32)),
-                    shape = RoundedCornerShape(28.dp)
+                // In VOZ mode: Return to SIM button + VOZ Call button
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(10.dp),
+                    verticalAlignment = Alignment.CenterVertically
                 ) {
-                    Icon(
-                        imageVector = Icons.Filled.Call,
-                        contentDescription = stringResource(R.string.dialpad_call_desc),
-                        modifier = Modifier.size(26.dp)
-                    )
-                    Spacer(modifier = Modifier.width(8.dp))
-                    Text(
-                        text = if (isVoz) stringResource(R.string.voz_online_call) else stringResource(R.string.voz_cellular_mode),
-                        style = MaterialTheme.typography.titleMedium,
-                        fontWeight = FontWeight.Bold
-                    )
+                    Button(
+                        onClick = onClearAll,
+                        modifier = Modifier
+                            .weight(1f)
+                            .height(56.dp)
+                            .testTag("dialpad_switch_sim_button"),
+                        colors = ButtonDefaults.buttonColors(
+                            containerColor = MaterialTheme.colorScheme.surfaceVariant,
+                            contentColor = MaterialTheme.colorScheme.onSurfaceVariant
+                        ),
+                        shape = RoundedCornerShape(28.dp)
+                    ) {
+                        Icon(
+                            imageVector = Icons.Filled.Call,
+                            contentDescription = null,
+                            modifier = Modifier.size(20.dp)
+                        )
+                        Spacer(modifier = Modifier.width(6.dp))
+                        Text(
+                            text = "SIM Mode",
+                            style = MaterialTheme.typography.labelLarge,
+                            fontWeight = FontWeight.SemiBold
+                        )
+                    }
+
+                    Button(
+                        onClick = { onPlaceCall(null) },
+                        enabled = canCall,
+                        modifier = Modifier
+                            .weight(1.8f)
+                            .height(56.dp)
+                            .testTag("dialpad_call_button"),
+                        colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF6750A4)),
+                        shape = RoundedCornerShape(28.dp)
+                    ) {
+                        Icon(
+                            imageVector = Icons.Filled.Bolt,
+                            contentDescription = stringResource(R.string.dialpad_call_desc),
+                            modifier = Modifier.size(26.dp)
+                        )
+                        Spacer(modifier = Modifier.width(8.dp))
+                        Text(
+                            text = stringResource(R.string.voz_online_call),
+                            style = MaterialTheme.typography.titleMedium,
+                            fontWeight = FontWeight.Bold
+                        )
+                    }
                 }
             }
         }
