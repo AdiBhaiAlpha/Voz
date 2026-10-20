@@ -61,3 +61,15 @@ test('an unreadable Firebase credential path is not usable authentication', () =
   assert.equal(result.checks.firebaseServerFileReadable, false);
   assert.ok(result.blockers.includes('FCM_CONFIGURATION_UNAVAILABLE'));
 });
+
+test('authorized Actions inventory exposes names/presence, never secret or variable values', async () => {
+  const {actionsCapabilities} = await import('../scripts/actions-capabilities.mjs');
+  const report = actionsCapabilities({GITHUB_TOKEN:'synthetic-gh-value',
+    CLOUDFLARE_API_TOKEN:'synthetic-cloud-value', CUSTOM_JSON:'{"private_key":"synthetic-private-value"}'},
+    {VOZ_HOST:'voice.valid-domain.dev', INTERNAL_VALUE:'synthetic-variable-value'});
+  assert.deepEqual(report.secretNames, ['CLOUDFLARE_API_TOKEN','CUSTOM_JSON']);
+  assert.equal(report.credentialPresenceOnly.cloudflare, true);
+  assert.equal(report.productionReady, false);
+  for (const value of ['synthetic-gh-value','synthetic-cloud-value','synthetic-private-value',
+    'synthetic-variable-value','voice.valid-domain.dev']) assert.ok(!JSON.stringify(report).includes(value));
+});
