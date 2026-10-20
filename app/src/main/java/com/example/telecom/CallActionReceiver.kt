@@ -9,8 +9,8 @@ import android.util.Log
 class CallActionReceiver : BroadcastReceiver() {
 
     companion object {
-        const val ACTION_ANSWER = "com.voz.calling.ACTION_ANSWER"
-        const val ACTION_DECLINE_OR_HANGUP = "com.voz.calling.ACTION_DECLINE_OR_HANGUP"
+        const val ACTION_ANSWER = "com.voz.caller.ACTION_ANSWER"
+        const val ACTION_DECLINE_OR_HANGUP = "com.voz.caller.ACTION_DECLINE_OR_HANGUP"
         const val EXTRA_CALL_ID = "extra_call_id"
     }
 

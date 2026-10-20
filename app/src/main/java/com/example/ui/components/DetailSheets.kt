@@ -380,16 +380,21 @@ fun CallRecordDetailBottomSheet(
                 .fillMaxWidth()
                 .padding(horizontal = 24.dp, vertical = 8.dp)
         ) {
+            val hasName = !detail.displayName.isNullOrBlank() && detail.displayName.trim() != detail.rawNumber.trim() && detail.displayName.trim() != "null"
+            val title = if (hasName) detail.displayName!! else PhoneNormalizer.formatForDisplay(detail.rawNumber).ifBlank { detail.rawNumber.ifBlank { "Unknown Number" } }
             Text(
-                text = detail.displayName ?: PhoneNormalizer.formatForDisplay(detail.rawNumber),
+                text = title,
                 style = MaterialTheme.typography.titleLarge,
                 fontWeight = FontWeight.Bold
             )
-            Text(
-                text = PhoneNormalizer.formatForDisplay(detail.rawNumber),
-                style = MaterialTheme.typography.bodyMedium,
-                color = MaterialTheme.colorScheme.onSurfaceVariant
-            )
+            if (hasName && detail.rawNumber.isNotBlank()) {
+                Text(
+                    text = PhoneNormalizer.formatForDisplay(detail.rawNumber),
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
+
 
             Spacer(modifier = Modifier.height(16.dp))
 

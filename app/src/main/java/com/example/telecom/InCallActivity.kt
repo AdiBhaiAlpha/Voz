@@ -388,7 +388,9 @@ fun VozIncomingCallScreen(
                         .border(2.dp, VozLimeGreen, CircleShape),
                     contentAlignment = Alignment.Center
                 ) {
-                    val initial = (call.displayName?.firstOrNull() ?: call.rawNumber.firstOrNull() ?: '?').uppercase()
+                    val hasName = call.hasContactName
+                    val initialChar = if (hasName) (call.displayName?.firstOrNull() ?: '?') else (call.rawNumber.firstOrNull() ?: '?')
+                    val initial = initialChar.uppercaseChar().toString()
                     Text(
                         text = initial,
                         style = MaterialTheme.typography.displayMedium,
@@ -400,8 +402,8 @@ fun VozIncomingCallScreen(
 
             Spacer(modifier = Modifier.height(24.dp))
 
-            // Caller Name
-            val displayTitle = call.displayName ?: PhoneNormalizer.formatForDisplay(call.rawNumber)
+            // Caller Name (guaranteed never blank for unsaved numbers)
+            val displayTitle = call.displayTitle
             Text(
                 text = displayTitle,
                 style = MaterialTheme.typography.headlineLarge,
@@ -411,7 +413,7 @@ fun VozIncomingCallScreen(
             )
 
             // Number line if display name is present
-            if (call.displayName != null && call.rawNumber.isNotBlank()) {
+            if (call.hasContactName && call.rawNumber.isNotBlank()) {
                 Spacer(modifier = Modifier.height(6.dp))
                 Text(
                     text = PhoneNormalizer.formatForDisplay(call.rawNumber),
@@ -424,7 +426,7 @@ fun VozIncomingCallScreen(
             Spacer(modifier = Modifier.height(14.dp))
 
             // Truecaller Trust & Verification Badge
-            val isVerified = call.displayName != null
+            val isVerified = call.hasContactName
             Card(
                 colors = CardDefaults.cardColors(
                     containerColor = if (isVerified) Color(0xFF162A14) else VozCardSurface
@@ -632,7 +634,9 @@ fun VozOutgoingCallScreen(
                     .border(2.dp, VozLimeGreen.copy(alpha = 0.8f), CircleShape),
                 contentAlignment = Alignment.Center
             ) {
-                val initial = (call.displayName?.firstOrNull() ?: call.rawNumber.firstOrNull() ?: '?').uppercase()
+                val hasName = call.hasContactName
+                val initialChar = if (hasName) (call.displayName?.firstOrNull() ?: '?') else (call.rawNumber.firstOrNull() ?: '?')
+                val initial = initialChar.uppercaseChar().toString()
                 Text(
                     text = initial,
                     style = MaterialTheme.typography.displayMedium,
@@ -643,7 +647,7 @@ fun VozOutgoingCallScreen(
 
             Spacer(modifier = Modifier.height(24.dp))
 
-            val displayTitle = call.displayName ?: PhoneNormalizer.formatForDisplay(call.rawNumber)
+            val displayTitle = call.displayTitle
             Text(
                 text = displayTitle,
                 style = MaterialTheme.typography.headlineLarge,
@@ -652,7 +656,7 @@ fun VozOutgoingCallScreen(
                 color = Color.White
             )
 
-            if (call.displayName != null && call.rawNumber.isNotBlank()) {
+            if (call.hasContactName && call.rawNumber.isNotBlank()) {
                 Spacer(modifier = Modifier.height(6.dp))
                 Text(
                     text = PhoneNormalizer.formatForDisplay(call.rawNumber),
@@ -858,7 +862,9 @@ fun VozActiveCallScreen(
                     .border(2.dp, if (call.isOnHold) Color(0xFFFBBF24) else VozLimeGreen, CircleShape),
                 contentAlignment = Alignment.Center
             ) {
-                val initial = (call.displayName?.firstOrNull() ?: call.rawNumber.firstOrNull() ?: '?').uppercase()
+                val hasName = call.hasContactName
+                val initialChar = if (hasName) (call.displayName?.firstOrNull() ?: '?') else (call.rawNumber.firstOrNull() ?: '?')
+                val initial = initialChar.uppercaseChar().toString()
                 Text(
                     text = initial,
                     style = MaterialTheme.typography.headlineLarge,
@@ -869,7 +875,7 @@ fun VozActiveCallScreen(
 
             Spacer(modifier = Modifier.height(18.dp))
 
-            val displayTitle = call.displayName ?: PhoneNormalizer.formatForDisplay(call.rawNumber)
+            val displayTitle = call.displayTitle
             Text(
                 text = displayTitle,
                 style = MaterialTheme.typography.headlineMedium,
@@ -878,7 +884,7 @@ fun VozActiveCallScreen(
                 color = Color.White
             )
 
-            if (call.displayName != null && call.rawNumber.isNotBlank()) {
+            if (call.hasContactName && call.rawNumber.isNotBlank()) {
                 Spacer(modifier = Modifier.height(4.dp))
                 Text(
                     text = PhoneNormalizer.formatForDisplay(call.rawNumber),

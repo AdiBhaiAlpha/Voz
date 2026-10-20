@@ -93,9 +93,12 @@ class VozCallOverlayService : Service(), LifecycleOwner, SavedStateRegistryOwner
             WindowManager.LayoutParams.TYPE_PHONE
         }
 
+        val statusBarResId = resources.getIdentifier("status_bar_height", "dimen", "android")
+        val statusBarHeight = if (statusBarResId > 0) resources.getDimensionPixelSize(statusBarResId) else (32 * resources.displayMetrics.density).toInt()
+        val topOffsetPx = statusBarHeight + (10 * resources.displayMetrics.density).toInt()
+
         val params = WindowManager.LayoutParams(
-            (resources.displayMetrics.widthPixels - (32 * resources.displayMetrics.density).toInt())
-                .coerceAtMost((360 * resources.displayMetrics.density).toInt()),
+            WindowManager.LayoutParams.WRAP_CONTENT,
             WindowManager.LayoutParams.WRAP_CONTENT,
             layoutParamsType,
             WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE or
@@ -103,8 +106,7 @@ class VozCallOverlayService : Service(), LifecycleOwner, SavedStateRegistryOwner
             PixelFormat.TRANSLUCENT
         ).apply {
             gravity = Gravity.TOP or Gravity.CENTER_HORIZONTAL
-            // Default window bounds already exclude the status bar; add a small gap.
-            y = (12 * resources.displayMetrics.density).toInt()
+            y = topOffsetPx
         }
 
         val composeView = ComposeView(this).apply {

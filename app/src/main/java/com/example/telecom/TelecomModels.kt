@@ -1,5 +1,6 @@
 package com.example.telecom
 
+import com.example.domain.PhoneNormalizer
 import com.example.domain.SimSubscriptionItem
 
 enum class CallLifecycleState {
@@ -31,7 +32,25 @@ data class VozCallUiModel(
     val isRecording: Boolean = false,
     val recordingError: String? = null,
     val isVozOnlineCall: Boolean = false
-)
+) {
+    /**
+     * Resolves the primary title to display. If the number is unsaved (no contact name),
+     * this MUST display the formatted phone number, NEVER blank!
+     */
+    val displayTitle: String
+        get() {
+            val name = displayName?.trim()?.takeIf { it.isNotBlank() && it != rawNumber && it != "null" }
+            if (name != null) return name
+            val formatted = PhoneNormalizer.formatForDisplay(rawNumber).trim()
+            if (formatted.isNotBlank()) return formatted
+            if (rawNumber.isNotBlank()) return rawNumber.trim()
+            return "Unknown Caller"
+        }
+
+    val hasContactName: Boolean
+        get() = !displayName.isNullOrBlank() && displayName.trim() != rawNumber.trim() && displayName.trim() != "null"
+}
+
 
 data class VozAudioState(
     val isMuted: Boolean = false,

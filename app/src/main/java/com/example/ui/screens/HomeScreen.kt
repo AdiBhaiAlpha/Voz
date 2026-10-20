@@ -99,74 +99,7 @@ fun HomeScreen(
         ) {
             Spacer(modifier = Modifier.height(8.dp))
 
-            // Active Call Banner (if a call is ongoing, shows tap to return)
-            if (activeCallModel != null) {
-                val call = activeCallModel!!
-                Card(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(bottom = 8.dp)
-                        .clickable {
-                            val intent = Intent(context, InCallActivity::class.java).apply {
-                                flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_SINGLE_TOP
-                            }
-                            context.startActivity(intent)
-                        }
-                        .testTag("active_call_banner"),
-                    colors = CardDefaults.cardColors(
-                        containerColor = if (call.state == CallLifecycleState.ACTIVE) Color(0xFF142416) else Color(0xFF131A20)
-                    ),
-                    border = BorderStroke(1.dp, if (call.state == CallLifecycleState.ACTIVE) Color(0xFFA3E635) else Color(0xFF202A32)),
-                    shape = RoundedCornerShape(16.dp)
-                ) {
-                    Row(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(12.dp),
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.SpaceBetween
-                    ) {
-                        Row(verticalAlignment = Alignment.CenterVertically) {
-                            Box(
-                                modifier = Modifier
-                                    .size(36.dp)
-                                    .clip(CircleShape)
-                                    .background(Color(0xFFA3E635).copy(alpha = 0.2f)),
-                                contentAlignment = Alignment.Center
-                            ) {
-                                Icon(
-                                    imageVector = Icons.Filled.Call,
-                                    contentDescription = null,
-                                    tint = Color(0xFFA3E635),
-                                    modifier = Modifier.size(20.dp)
-                                )
-                            }
-                            Spacer(modifier = Modifier.width(12.dp))
-                            Column {
-                                Text(
-                                    text = call.displayName ?: PhoneNormalizer.formatForDisplay(call.rawNumber),
-                                    style = MaterialTheme.typography.titleMedium,
-                                    color = Color.White,
-                                    fontWeight = FontWeight.Bold
-                                )
-                                Text(
-                                    text = if (call.state == CallLifecycleState.ACTIVE) "Active Carrier Call • Tap to view"
-                                    else "Dialing… • Tap to view",
-                                    style = MaterialTheme.typography.bodySmall,
-                                    color = Color.White.copy(alpha = 0.8f)
-                                )
-                            }
-                        }
-
-                        IconButton(
-                            onClick = { CallManager.declineOrHangup() },
-                            modifier = Modifier.testTag("banner_hangup_btn")
-                        ) {
-                            Icon(Icons.Filled.CallEnd, contentDescription = "Hang Up", tint = Color(0xFFEF4444))
-                        }
-                    }
-                }
-            } else if (!uiState.isDefaultDialer) {
+            if (!uiState.isDefaultDialer) {
                 // Setup Default Phone App Role banner for Truecaller-style caller screen capability
                 Card(
                     modifier = Modifier
@@ -668,8 +601,9 @@ fun RecentCallRowItem(
 
                 Column {
                     Row(verticalAlignment = Alignment.CenterVertically) {
+                        val primaryTitle = record.displayTitle
                         Text(
-                            text = record.displayName ?: PhoneNormalizer.formatForDisplay(record.rawNumber),
+                            text = primaryTitle,
                             style = MaterialTheme.typography.titleMedium,
                             fontWeight = if (isMissed) FontWeight.Bold else FontWeight.SemiBold,
                             color = if (isMissed) Color(0xFFD32F2F) else MaterialTheme.colorScheme.onSurface

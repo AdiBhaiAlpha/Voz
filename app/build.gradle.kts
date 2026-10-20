@@ -9,7 +9,7 @@ android {
     compileSdk = 34
 
     defaultConfig {
-        applicationId = "com.voz.calling"
+        applicationId = "com.voz.caller"
         minSdk = 26
         targetSdk = 34
         // The app supports English/Bangla, not the dozens of vendored Material
@@ -115,3 +115,20 @@ dependencies {
     debugImplementation(libs.androidx.ui.tooling)
     debugImplementation(libs.androidx.ui.test.manifest)
 }
+
+tasks.register("copyApkToRoot") {
+    dependsOn("assembleDebug")
+    doLast {
+        file("../voz-caller.apk").takeIf { it.exists() }?.delete()
+        file("../app-debug.apk").takeIf { it.exists() }?.delete()
+        file("../voz-debug.apk").takeIf { it.exists() }?.delete()
+
+        val apkFile = file("build/outputs/apk/debug/app-debug.apk")
+        if (apkFile.exists()) {
+            apkFile.copyTo(file("../voz-caller.apk"), overwrite = true)
+            apkFile.copyTo(file("../app-debug.apk"), overwrite = true)
+            apkFile.copyTo(file("../voz-debug.apk"), overwrite = true)
+        }
+    }
+}
+

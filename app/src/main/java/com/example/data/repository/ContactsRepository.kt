@@ -54,8 +54,15 @@ class ContactsRepository(private val context: Context) {
                 while (cursor.moveToNext()) {
                     val contactId = if (idIdx >= 0) cursor.getLong(idIdx) else 0L
                     val lookupKey = if (lookupIdx >= 0) cursor.getString(lookupIdx) ?: "" else ""
-                    val name = if (nameIdx >= 0) cursor.getString(nameIdx) ?: "Unknown" else "Unknown"
                     val number = if (numberIdx >= 0) cursor.getString(numberIdx) ?: "" else ""
+                    val rawName = if (nameIdx >= 0) cursor.getString(nameIdx)?.trim() else null
+                    val name = if (!rawName.isNullOrBlank() && rawName != "null") {
+                        rawName
+                    } else if (number.isNotBlank()) {
+                        PhoneNormalizer.formatForDisplay(number)
+                    } else {
+                        "Unknown"
+                    }
                     val photoUri = if (photoIdx >= 0) cursor.getString(photoIdx) else null
                     val type = if (typeIdx >= 0) cursor.getInt(typeIdx) else 2
                     val label = if (labelIdx >= 0) cursor.getString(labelIdx) ?: "Mobile" else "Mobile"

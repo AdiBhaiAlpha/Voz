@@ -10,7 +10,9 @@ import android.content.pm.PackageManager
 import android.content.pm.ServiceInfo
 import android.media.AudioAttributes
 import android.media.RingtoneManager
+import android.net.Uri
 import android.os.Build
+import android.provider.ContactsContract
 import android.provider.Settings
 import android.telecom.Call
 import android.telecom.CallAudioState
@@ -68,10 +70,11 @@ class VozInCallService : InCallService() {
         super.onCallAdded(call)
         if (com.example.online.OnlineCalls.isOnlineActive()) com.example.online.OnlineCalls.endFromUi()
         val details = call.details
-        val rawNumber = details?.handle?.schemeSpecificPart ?: ""
+        val rawNumber = CallManager.extractCallNumber(details)
         val normalized = PhoneNormalizer.normalizeForComparison(rawNumber).ifBlank { rawNumber }
         val state = CallSessionController.mapSystemState(call)
-        val callerDisplay = details?.callerDisplayName?.takeIf { it.isNotBlank() }
+        val rawCallerDisplay = details?.callerDisplayName?.takeIf { it.isNotBlank() }
+        val callerDisplay = rawCallerDisplay?.trim()?.takeIf { it.isNotBlank() && it != rawNumber && it != "null" }
         val connectTime = details?.connectTimeMillis ?: 0L
 
         // Real incoming call detection from Android Telecom state and direction
@@ -98,13 +101,34 @@ class VozInCallService : InCallService() {
         CallManager.onCallAdded(call, callerDisplay, null, callId)
         CallSessionController.registerCall(call, initialModel)
 
-        // Enrich with local metadata in background
+        // Enrich with contact resolution and local metadata in background
         serviceScope.launch {
             try {
+                var resolvedName = callerDisplay
+                if (resolvedName.isNullOrBlank() && normalized.isNotBlank()) {
+                    try {
+                        val lookupUri = Uri.withAppendedPath(
+                            ContactsContract.PhoneLookup.CONTENT_FILTER_URI,
+                            Uri.encode(rawNumber.ifBlank { normalized })
+                        )
+                        val projection = arrayOf(ContactsContract.PhoneLookup.DISPLAY_NAME)
+                        applicationContext.contentResolver.query(lookupUri, projection, null, null, null)?.use { cursor ->
+                            if (cursor.moveToFirst()) {
+                                val nameIdx = cursor.getColumnIndex(ContactsContract.PhoneLookup.DISPLAY_NAME)
+                                if (nameIdx >= 0) {
+                                    resolvedName = cursor.getString(nameIdx)?.trim()?.takeIf { it.isNotBlank() && it != rawNumber && it != "null" }
+                                }
+                            }
+                        }
+                    } catch (e: Exception) {
+                        Log.d(TAG, "PhoneLookup not available or permission denied", e)
+                    }
+                }
+
                 val assist = database?.assistDao()?.getAssistByKey(normalized)
                 CallSessionController.updateEnrichedMetadata(
                     callId = callId,
-                    displayName = callerDisplay,
+                    displayName = resolvedName,
                     photoUri = null,
                     assistNote = assist?.note,
                     assistLabel = assist?.customLabel,
@@ -115,7 +139,7 @@ class VozInCallService : InCallService() {
             }
         }
 
-        val callerTitle = callerDisplay ?: PhoneNormalizer.formatForDisplay(rawNumber).ifBlank { "Unknown Caller" }
+        val callerTitle = initialModel.displayTitle
         updateCallNotification(callId, callerTitle, isIncoming, isRinging = (call.state == Call.STATE_RINGING))
 
         // Listen for call state transitions on this call

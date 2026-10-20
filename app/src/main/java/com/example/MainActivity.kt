@@ -248,74 +248,80 @@ fun VozAppRoot(
             modifier = Modifier
                 .fillMaxSize()
                 .padding(innerPadding)
+                .statusBarsPadding()
         ) {
-            when (uiState.currentDestination) {
-                VozDestination.HOME -> HomeScreen(
-                    uiState = uiState,
-                    onSearchOrDialChange = { viewModel.onHomeSearchOrDialChange(it) },
-                    onDigitPressed = { viewModel.onDialpadDigitPressed(it) },
-                    onBackspace = { viewModel.onDialpadBackspace() },
-                    onClearAll = { viewModel.onDialpadClearAll() },
-                    onToggleDialpad = { viewModel.setDialpadVisible(it) },
-                    onPlaceCall = { rawNumber, name, explicitSim ->
-                        viewModel.placeRealCall(rawNumber, name, explicitSim)
-                    },
-                    onContactClick = { viewModel.openDetailForContact(it) },
-                    onRecordClick = { viewModel.openDetailForCallRecord(it) },
-                    onGrantPermissionsClick = { requestRequiredPermissions() },
-                    onRequestDefaultDialer = onRequestDialerRole
-                )
+            Box(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .padding(top = if (activeCall != null) 58.dp else 0.dp)
+            ) {
+                when (uiState.currentDestination) {
+                    VozDestination.HOME -> HomeScreen(
+                        uiState = uiState,
+                        onSearchOrDialChange = { viewModel.onHomeSearchOrDialChange(it) },
+                        onDigitPressed = { viewModel.onDialpadDigitPressed(it) },
+                        onBackspace = { viewModel.onDialpadBackspace() },
+                        onClearAll = { viewModel.onDialpadClearAll() },
+                        onToggleDialpad = { viewModel.setDialpadVisible(it) },
+                        onPlaceCall = { rawNumber, name, explicitSim ->
+                            viewModel.placeRealCall(rawNumber, name, explicitSim)
+                        },
+                        onContactClick = { viewModel.openDetailForContact(it) },
+                        onRecordClick = { viewModel.openDetailForCallRecord(it) },
+                        onGrantPermissionsClick = { requestRequiredPermissions() },
+                        onRequestDefaultDialer = onRequestDialerRole
+                    )
 
-                VozDestination.CONTACTS -> ContactsScreen(
-                    uiState = uiState,
-                    onSearchQueryChange = { viewModel.onContactsSearchQueryChange(it) },
-                    onFavoritesOnlyChange = { viewModel.setFavoritesOnly(it) },
-                    onContactClick = { viewModel.openDetailForContact(it) },
-                    onPlaceCall = { rawNumber, name ->
-                        viewModel.placeRealCall(rawNumber, name)
-                    },
-                    onGrantPermissionsClick = { requestRequiredPermissions() }
-                )
+                    VozDestination.CONTACTS -> ContactsScreen(
+                        uiState = uiState,
+                        onSearchQueryChange = { viewModel.onContactsSearchQueryChange(it) },
+                        onFavoritesOnlyChange = { viewModel.setFavoritesOnly(it) },
+                        onContactClick = { viewModel.openDetailForContact(it) },
+                        onPlaceCall = { rawNumber, name ->
+                            viewModel.placeRealCall(rawNumber, name)
+                        },
+                        onGrantPermissionsClick = { requestRequiredPermissions() }
+                    )
 
-                VozDestination.ACTIVITY -> ActivityScreen(
-                    uiState = uiState,
-                    onFilterChange = { viewModel.onActivityFilterChange(it) },
-                    onSearchQueryChange = { viewModel.onActivitySearchQueryChange(it) },
-                    onRecordClick = { viewModel.openDetailForCallRecord(it) },
-                    onPlaceCall = { rawNumber, name ->
-                        viewModel.placeRealCall(rawNumber, name)
-                    },
-                    onClearAllHistory = { viewModel.clearAllCallHistory() },
-                    onGrantPermissionsClick = { requestRequiredPermissions() }
-                )
+                    VozDestination.ACTIVITY -> ActivityScreen(
+                        uiState = uiState,
+                        onFilterChange = { viewModel.onActivityFilterChange(it) },
+                        onSearchQueryChange = { viewModel.onActivitySearchQueryChange(it) },
+                        onRecordClick = { viewModel.openDetailForCallRecord(it) },
+                        onPlaceCall = { rawNumber, name ->
+                            viewModel.placeRealCall(rawNumber, name)
+                        },
+                        onClearAllHistory = { viewModel.clearAllCallHistory() },
+                        onGrantPermissionsClick = { requestRequiredPermissions() }
+                    )
 
-                VozDestination.TOOLS -> ToolsScreen(
-                    uiState = uiState,
-                    onRequestDefaultDialer = onRequestDialerRole,
-                    onRequestCallScreening = onRequestScreeningRole,
-                    onThemeChange = { viewModel.setThemeMode(it) },
-                    onLanguageChange = { viewModel.setLanguageCode(it) },
-                    onHapticChange = { viewModel.setHapticFeedback(it) },
-                    onSoundChange = { viewModel.setDialpadSound(it) },
-                    onAutoSpeakerChange = { viewModel.preferencesRepository.setAutoSpeaker(it) },
-                    onConfirmBeforeCallChange = { viewModel.setConfirmBeforeCall(it) },
-                    onPreferredSimChange = { viewModel.setPreferredSimId(it) },
-                    onBlockNumber = { num, reason -> viewModel.blockNumber(num, reason) },
-                    onUnblockNumber = { viewModel.unblockNumber(it) },
-                    onCompleteReminder = { viewModel.completeReminder(it) },
-                    onDeleteReminder = { viewModel.deleteReminder(it) },
-                    onLogoutVozAccount = { viewModel.logoutVozAccount() },
-                    onToggleFloatingOverlay = { viewModel.setFloatingIslandOverlayEnabled(it) }
-                )
+                    VozDestination.TOOLS -> ToolsScreen(
+                        uiState = uiState,
+                        onRequestDefaultDialer = onRequestDialerRole,
+                        onRequestCallScreening = onRequestScreeningRole,
+                        onThemeChange = { viewModel.setThemeMode(it) },
+                        onLanguageChange = { viewModel.setLanguageCode(it) },
+                        onHapticChange = { viewModel.setHapticFeedback(it) },
+                        onSoundChange = { viewModel.setDialpadSound(it) },
+                        onAutoSpeakerChange = { viewModel.preferencesRepository.setAutoSpeaker(it) },
+                        onConfirmBeforeCallChange = { viewModel.setConfirmBeforeCall(it) },
+                        onPreferredSimChange = { viewModel.setPreferredSimId(it) },
+                        onBlockNumber = { num, reason -> viewModel.blockNumber(num, reason) },
+                        onUnblockNumber = { viewModel.unblockNumber(it) },
+                        onCompleteReminder = { viewModel.completeReminder(it) },
+                        onDeleteReminder = { viewModel.deleteReminder(it) },
+                        onLogoutVozAccount = { viewModel.logoutVozAccount() },
+                        onToggleFloatingOverlay = { viewModel.setFloatingIslandOverlayEnabled(it) }
+                    )
+                }
             }
 
-            // Dynamic Island Floating Call Pill (Incoming and Active Calls)
+            // Dynamic Island Floating Call Pill: Sits cleanly below system status bar / time & date
             activeCall?.let { call ->
                 Box(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .statusBarsPadding()
-                        .padding(top = 12.dp, start = 24.dp, end = 24.dp)
+                        .padding(top = 8.dp)
                         .zIndex(100f),
                     contentAlignment = Alignment.TopCenter
                 ) {

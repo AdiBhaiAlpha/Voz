@@ -74,7 +74,8 @@ class CallLogRepository(private val context: Context) {
                 while (cursor.moveToNext() && records.size < 500) {
                     val id = if (idIdx >= 0) cursor.getLong(idIdx) else 0L
                     val rawNumber = if (numIdx >= 0) cursor.getString(numIdx) ?: "" else ""
-                    val name = if (nameIdx >= 0) cursor.getString(nameIdx) else null
+                    val rawName = if (nameIdx >= 0) cursor.getString(nameIdx) else null
+                    val name = rawName?.trim()?.takeIf { it.isNotBlank() && it != rawNumber && it != "null" && it != "-1" && it != "-2" }
                     val photo = if (photoIdx >= 0) cursor.getString(photoIdx) else null
                     val date = if (dateIdx >= 0) cursor.getLong(dateIdx) else 0L
                     val dur = if (durIdx >= 0) cursor.getLong(durIdx) else 0L

@@ -67,6 +67,19 @@ object CallManager {
         }
     }
 
+    fun extractCallNumber(details: Call.Details?): String {
+        if (details == null) return ""
+        val handlePart = details.handle?.schemeSpecificPart?.trim()
+        if (!handlePart.isNullOrBlank()) return handlePart
+        val gatewayPart = details.gatewayInfo?.originalAddress?.schemeSpecificPart?.trim()
+        if (!gatewayPart.isNullOrBlank()) return gatewayPart
+        val extraAddress = details.extras?.getString("android.telecom.extra.INCOMING_CALL_ADDRESS")?.trim()
+        if (!extraAddress.isNullOrBlank()) return extraAddress
+        val callerDisplay = details.callerDisplayName?.trim()
+        if (!callerDisplay.isNullOrBlank() && callerDisplay.any { it.isDigit() }) return callerDisplay
+        return ""
+    }
+
     fun onCallAdded(
         call: Call,
         enrichedName: String? = null,
@@ -78,11 +91,12 @@ object CallManager {
         call.registerCallback(callCallback)
 
         val details = call.details
-        val rawNumber = details?.handle?.schemeSpecificPart ?: ""
+        val rawNumber = extractCallNumber(details)
         val normalized = PhoneNormalizer.normalizeForComparison(rawNumber).ifBlank { rawNumber }
         val mappedState = mapState(call.state)
         val connectTime = details?.connectTimeMillis ?: 0L
-        val displayName = enrichedName ?: details?.callerDisplayName?.takeIf { it.isNotBlank() }
+        val rawDisplayName = enrichedName ?: details?.callerDisplayName?.takeIf { it.isNotBlank() }
+        val displayName = rawDisplayName?.trim()?.takeIf { it.isNotBlank() && it != rawNumber && it != "null" }
 
         // Any call with STATE_RINGING is an incoming call in Android Telecom;
         // Also check DIRECTION_INCOMING for already-connected incoming calls.
