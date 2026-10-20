@@ -19,3 +19,5 @@ server/.pg-test/
 *.key
 *.dump
 *.pgdump
+
+server/dist/
