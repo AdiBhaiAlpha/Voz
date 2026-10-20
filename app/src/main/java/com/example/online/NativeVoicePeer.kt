@@ -102,6 +102,18 @@ class NativeVoicePeer(
         })
     }
     fun ice(candidate: IceCandidate) { if (remoteReady) peer.addIceCandidate(candidate) else queued.add(candidate) }
+    /** Aggregate packet counters only: no SDP, addresses, credentials or audio.
+     * Useful for diagnostics/tests; CONNECTED alone does not prove RTP flow.
+     */
+    internal data class AudioPackets(val sent: Long, val received: Long)
+    internal suspend fun audioPackets(): AudioPackets = suspendCancellableCoroutine { cont ->
+        peer.getStats { report ->
+            fun count(type: String, member: String): Long = report.statsMap.values
+                .filter { it.type == type && (it.members["kind"] == "audio" || it.members["mediaType"] == "audio") }
+                .sumOf { (it.members[member] as? Number)?.toLong() ?: 0L }
+            if (cont.isActive) cont.resume(AudioPackets(count("outbound-rtp", "packetsSent"), count("inbound-rtp", "packetsReceived")))
+        }
+    }
     fun mute(muted: Boolean) { track.setEnabled(!muted) }
     fun close() { peer.close(); peer.dispose(); track.dispose(); source.dispose(); factory.dispose(); audioDevice.release(); queued.clear() }
     companion object {

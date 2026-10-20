@@ -10,7 +10,6 @@ import android.telecom.PhoneAccountHandle
 import android.telecom.TelecomManager
 import android.telephony.SubscriptionManager
 import androidx.core.content.ContextCompat
-import androidx.annotation.ChecksPermission
 import com.example.domain.PhoneNormalizer
 import com.example.domain.SimSubscriptionItem
 
@@ -78,7 +77,6 @@ class TelecomDialerManager(private val context: Context) {
         }
     }
 
-    @ChecksPermission(android.Manifest.permission.CALL_PHONE)
     fun hasCallPhonePermission(): Boolean {
         return ContextCompat.checkSelfPermission(
             context,
@@ -86,7 +84,6 @@ class TelecomDialerManager(private val context: Context) {
         ) == android.content.pm.PackageManager.PERMISSION_GRANTED
     }
 
-    @ChecksPermission(android.Manifest.permission.READ_PHONE_STATE)
     fun hasReadPhoneStatePermission(): Boolean {
         return ContextCompat.checkSelfPermission(
             context,
@@ -97,7 +94,7 @@ class TelecomDialerManager(private val context: Context) {
     fun getAvailableSimAccounts(): List<SimSubscriptionItem> {
         val result = mutableListOf<SimSubscriptionItem>()
         try {
-            if (hasReadPhoneStatePermission()) {
+            if (ContextCompat.checkSelfPermission(context, android.Manifest.permission.READ_PHONE_STATE) == android.content.pm.PackageManager.PERMISSION_GRANTED) {
                 val subManager = context.getSystemService(Context.TELEPHONY_SUBSCRIPTION_SERVICE) as? SubscriptionManager
                 val subList = subManager?.activeSubscriptionInfoList
                 if (!subList.isNullOrEmpty()) {

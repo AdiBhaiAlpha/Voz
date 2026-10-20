@@ -75,7 +75,7 @@ jobs:
         if-no-files-found: ignore
 
   registration-ui:
-    name: Registration UI (emulator only)
+    name: Native SDK and registration UI (one emulator)
     runs-on: ubuntu-24.04
     timeout-minutes: 25
     steps:
@@ -90,14 +90,14 @@ jobs:
           echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules
           sudo udevadm control --reload-rules
           sudo udevadm trigger --name-match=kvm
-      - name: Run registration form validation (not network, FCM or audio)
+      - name: Run native SDK RTP loopback and registration form tests (not public calls)
         uses: ReactiveCircus/android-emulator-runner@c9c93e6ba9c4194322e114c40970d5983d9a07cc # v2.38.0
         with:
           api-level: 30
           arch: x86_64
           target: default
           disable-animations: true
-          script: bash .github/scripts/android-check.sh connectedDebugAndroidTest -Pandroid.testInstrumentationRunnerArguments.class=com.example.telecom.OnlineRegistrationUiTest
+          script: bash .github/scripts/android-check.sh connectedDebugAndroidTest -Pandroid.testInstrumentationRunnerArguments.class=com.example.telecom.OnlineRegistrationUiTest,com.example.online.NativeVoicePeerIntegrationTest
       - name: Preserve emulator test results
         if: always()
         uses: actions/upload-artifact@v7

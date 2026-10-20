@@ -24,7 +24,12 @@ for report in Path('app/build/reports').glob('lint-results-*.xml'):
             continue
         loc = issue.find('location')
         lint.append(f"{loc.get('file', '') if loc is not None else ''}:{loc.get('line', '') if loc is not None else ''}: [{issue.get('id')}] {issue.get('message', '')[:500]}")
-message = '\n'.join(lint or errors or lines[-25:])[:60000]
+instrumentation = []
+for report in Path('app/build/outputs/androidTest-results/connected').rglob('*.xml'):
+    for case in ET.parse(report).getroot().iter('testcase'):
+        for failure in list(case.findall('failure')) + list(case.findall('error')):
+            instrumentation.append(f"{case.get('classname')}.{case.get('name')}: {failure.get('message', '')}\n{(failure.text or '')[:5000]}")
+message = '\n'.join(instrumentation or lint or errors or lines[-25:])[:60000]
 message = message.replace('%', '%25').replace('\r', '%0D').replace('\n', '%0A')
 print(f'::error title=Android verification::{message}')
 PY
