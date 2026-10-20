@@ -43,3 +43,34 @@ test('successful Gradle execution does not manufacture a failure annotation', {s
   assert.equal(result.status, 0);
   assert.ok(!result.stdout.includes('::error'));
 });
+
+const reportGuard = fileURLToPath(new URL('../../.github/scripts/assert-android-tests.py', import.meta.url));
+function checkReport(xml) {
+  const cwd = mkdtempSync(join(tmpdir(), 'voz-android-report-'));
+  try {
+    const reports = join(cwd,'app/build/outputs/androidTest-results/connected/device');
+    mkdirSync(reports, {recursive:true});
+    if (xml) writeFileSync(join(reports,'TEST-fixture.xml'), xml);
+    return spawnSync('python3', [reportGuard,'instrumented'], {cwd, encoding:'utf8'});
+  } finally { rmSync(cwd, {recursive:true, force:true}); }
+}
+const requiredCases = [
+  ['com.example.online.NativeVoicePeerIntegrationTest','twoNativePeersNegotiateAndExchangeAudioRtp'],
+  ['com.example.telecom.OnlineRegistrationUiTest','newIdentityRequiresDisplayNameAndCredentials'],
+];
+function syntheticReport(child='') {
+  return `<testsuite>${requiredCases.map(([clazz,name]) => `<testcase classname="${clazz}" name="${name}">${child}</testcase>`).join('')}</testsuite>`;
+}
+test('Android report guard confirms both expected non-skipped cases', {skip:process.platform==='win32'}, () => {
+  const result = checkReport(syntheticReport());
+  assert.equal(result.status, 0, result.stdout+result.stderr);
+  assert.ok(result.stdout.includes('2 actual cases; 0 failures; 0 skipped'));
+});
+test('Android report guard rejects absent, skipped, failed or wrong-class test evidence', {skip:process.platform==='win32'}, () => {
+  for (const xml of ['', '<testsuite/>', syntheticReport('<skipped/>'),
+    syntheticReport('<failure/>'), '<testsuite><testcase classname="Other" name="notTheRequiredTests"/></testsuite>']) {
+    const result = checkReport(xml);
+    assert.equal(result.status, 1, result.stdout+result.stderr);
+    assert.ok(result.stdout.includes('::error'));
+  }
+});

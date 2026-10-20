@@ -55,6 +55,9 @@ jobs:
     - name: Run JVM tests
       run: bash .github/scripts/android-check.sh testDebugUnitTest
 
+    - name: Require actual JVM test results
+      run: python3 .github/scripts/assert-android-tests.py jvm
+
     - name: Android lint
       run: bash .github/scripts/android-check.sh lintDebug
 
@@ -98,6 +101,8 @@ jobs:
           target: default
           disable-animations: true
           script: bash .github/scripts/android-check.sh connectedDebugAndroidTest -Pandroid.testInstrumentationRunnerArguments.class=com.example.telecom.OnlineRegistrationUiTest,com.example.online.NativeVoicePeerIntegrationTest
+      - name: Require both native RTP and registration UI cases to pass (not skip)
+        run: python3 .github/scripts/assert-android-tests.py instrumented
       - name: Preserve emulator test results
         if: always()
         uses: actions/upload-artifact@v7
