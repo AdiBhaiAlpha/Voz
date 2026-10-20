@@ -66,17 +66,3 @@ jobs:
           PY
           fi
           exit "$result"
-  capabilities:
-    name: Authorized infrastructure capability audit (redacted)
-    runs-on: ubuntu-24.04
-    timeout-minutes: 5
-    steps:
-      - uses: actions/checkout@v7
-      - uses: actions/setup-node@v7
-        with:
-          node-version: 22
-      - name: Report existing authorized credential names/presence only
-        env:
-          ACTIONS_SECRET_INVENTORY: ${{ toJSON(secrets) }}
-          ACTIONS_VARIABLE_INVENTORY: ${{ toJSON(vars) }}
-        run: node server/scripts/actions-capabilities.mjs

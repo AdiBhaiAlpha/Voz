@@ -42,25 +42,29 @@ test('real coturn allocations, relay transport and credential expiry', {timeout:
     await new Promise((resolve,reject) => {
       const timer = setTimeout(() => reject(Error('coturn startup deadline: '+output.slice(-2000))), 90000);
       const read = data => {
-        output = (output+data.toString()).slice(-10000);
+        output += data.toString();
         if (/UDP listener opened on:.*127\.0\.0\.1/.test(output)) { clearTimeout(timer); resolve(); }
       };
       server.stdout.on('data', read); server.stderr.on('data', read);
       server.once('error', error => {clearTimeout(timer);reject(error);});
       server.once('exit', code => {clearTimeout(timer);reject(Error(`coturn exited ${code}: ${output.slice(-2000)}`));});
     });
+    assert.equal(spawnSync('docker', ['exec', '-d', container, 'turnutils_peer',
+      '-L', '127.0.0.1', '-p', '34801'], {stdio:'ignore', timeout:5000}).status, 0,
+      'Could not start the real UDP echo peer for TLS transport testing');
     const credential = (now = Math.floor(Date.now()/1000), signingSecret = secret) =>
       turnCredentials('relay-fixture', ['turn:127.0.0.1:34780'], signingSecret, now).iceServers[0];
     const client = (creds, flags = []) => new Promise((resolve,reject) => {
+      const serverLogOffset = output.length;
       const args = ['exec', '--user', `${process.getuid()}:${process.getgid()}`, container,
-        'turnutils_uclient', '-c', '-n', '5', '-m', '2', '-p', '34780',
+        'turnutils_uclient', '-v', '-c', '-n', '5', '-m', '2', '-p', '34780',
         '-u', creds.username, '-w', creds.credential, ...flags, '127.0.0.1'];
       const child = spawn('docker', args, {stdio:['ignore','pipe','pipe']});
       let log = '';
       const timer = setTimeout(() => {child.kill();reject(Error('TURN client deadline: '+log.slice(-2500)));}, 20000);
       child.stdout.on('data', b => {log += b;}); child.stderr.on('data', b => {log += b;});
       child.once('error', error => {clearTimeout(timer);reject(error);});
-      child.once('exit', code => {clearTimeout(timer);resolve({code,log});});
+      child.once('exit', code => {clearTimeout(timer);resolve({code,log,username:creds.username,serverLog:output.slice(serverLogOffset)});});
     });
     const relaySucceeded = result => {
       assert.equal(result.code, 0, result.log.slice(-3000));
@@ -71,7 +75,13 @@ test('real coturn allocations, relay transport and credential expiry', {timeout:
     };
     const rejected = (result, code) => {
       assert.notEqual(result.code, 0, 'Rejected request was unexpectedly accepted');
-      assert.match(result.log, new RegExp(`(?:error\\s*${code}|${code}\\s*\\()`,'i'), result.log.slice(-3000));
+      // Coturn's uclient consumes repeated 401 challenges internally and may
+      // print only 'Cannot complete Allocation'. Require the actual server's
+      // matching-user rejection as well as the client's failed exit status.
+      const matchingServerLines = result.serverLog.split('\n')
+        .filter(line => line.includes(`user <${result.username}>`)).join('\n');
+      const evidence = result.log+'\n'+matchingServerLines;
+      assert.match(evidence, new RegExp(`(?:error\\s*${code}|${code}\\s*\\()`,'i'), evidence.slice(-3500));
     };
     await t.test('UDP control relays real packets between two allocated clients', async () => {
       relaySucceeded(await client(credential(), ['-y']));
@@ -80,13 +90,17 @@ test('real coturn allocations, relay transport and credential expiry', {timeout:
       relaySucceeded(await client(credential(), ['-y', '-t']));
     });
     await t.test('TLS control relays packets using fixture certificate (not public PKI)', async () => {
-      relaySucceeded(await client(credential(), ['-y', '-t', '-S', '-p', '34781']));
+      // Echo-peer mode installs permissions before sending; uclient's -y TLS
+      // setup can send its first packets before the second client is ready.
+      // Retain the strict zero-loss assertion rather than accepting that race.
+      relaySucceeded(await client(credential(), ['-t', '-S', '-p', '34781',
+        '-E', '/fixture/cert.pem', '-e', '127.0.0.1', '-r', '34801']));
     });
     await t.test('incorrect HMAC is rejected with Unauthorized', async () => {
       rejected(await client(credential(undefined, 'wrong-fixture-secret'), ['-y']), 401);
     });
     await t.test('previously accepted credentials expire for a NEW allocation; fresh ones recover', async () => {
-      const short = credential(Math.floor(Date.now()/1000)-597); // Real expiry in ~3s.
+      const short = credential(Math.floor(Date.now()/1000)-590); // Real expiry in ~10s.
       relaySucceeded(await client(short, ['-y']));
       const expires = Number(short.username.split(':')[0]);
       await delay(Math.max(0, (expires+2)*1000-Date.now()));
